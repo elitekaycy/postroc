@@ -10,6 +10,7 @@ import type {
   EnvironmentConfig,
   AuthConfig,
   Header,
+  Field,
 } from '@/lib/types/core';
 
 interface WorkspaceStore {
@@ -43,6 +44,11 @@ interface WorkspaceStore {
   createCustom: (categoryId: string, name: string) => void;
   updateCustom: (customId: string, updates: Partial<Custom>) => void;
   deleteCustom: (customId: string) => void;
+
+  addField: (customId: string, field: Omit<Field, 'id'>) => void;
+  updateField: (customId: string, fieldId: string, updates: Partial<Field>) => void;
+  deleteField: (customId: string, fieldId: string) => void;
+  reorderFields: (customId: string, fieldIds: string[]) => void;
 
   setActiveWorkspace: (id: string | null) => void;
   setActiveProject: (id: string | null) => void;
@@ -388,6 +394,84 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
         }
         if (state.activeCustomId === customId) {
           state.activeCustomId = null;
+        }
+      }),
+
+    addField: (customId: string, field: Omit<Field, 'id'>) =>
+      set((state) => {
+        for (const workspace of state.workspaces) {
+          for (const project of workspace.projects) {
+            for (const category of project.categories) {
+              const custom = category.customs.find((c) => c.id === customId);
+              if (custom) {
+                custom.fields.push({
+                  ...field,
+                  id: crypto.randomUUID(),
+                });
+                custom.updatedAt = Date.now();
+                return;
+              }
+            }
+          }
+        }
+      }),
+
+    updateField: (customId: string, fieldId: string, updates: Partial<Field>) =>
+      set((state) => {
+        for (const workspace of state.workspaces) {
+          for (const project of workspace.projects) {
+            for (const category of project.categories) {
+              const custom = category.customs.find((c) => c.id === customId);
+              if (custom) {
+                const field = custom.fields.find((f) => f.id === fieldId);
+                if (field) {
+                  Object.assign(field, updates);
+                  custom.updatedAt = Date.now();
+                }
+                return;
+              }
+            }
+          }
+        }
+      }),
+
+    deleteField: (customId: string, fieldId: string) =>
+      set((state) => {
+        for (const workspace of state.workspaces) {
+          for (const project of workspace.projects) {
+            for (const category of project.categories) {
+              const custom = category.customs.find((c) => c.id === customId);
+              if (custom) {
+                custom.fields = custom.fields.filter((f) => f.id !== fieldId);
+                custom.updatedAt = Date.now();
+                return;
+              }
+            }
+          }
+        }
+      }),
+
+    reorderFields: (customId: string, fieldIds: string[]) =>
+      set((state) => {
+        for (const workspace of state.workspaces) {
+          for (const project of workspace.projects) {
+            for (const category of project.categories) {
+              const custom = category.customs.find((c) => c.id === customId);
+              if (custom) {
+                const fieldMap = new Map(custom.fields.map((f) => [f.id, f]));
+                const reordered: Field[] = [];
+                for (const id of fieldIds) {
+                  const field = fieldMap.get(id);
+                  if (field) {
+                    reordered.push(field);
+                  }
+                }
+                custom.fields = reordered;
+                custom.updatedAt = Date.now();
+                return;
+              }
+            }
+          }
         }
       }),
 
