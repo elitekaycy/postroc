@@ -2,15 +2,17 @@
 
 import { useWorkspaceStore } from '@/lib/store/workspace-store';
 import { CategoryConfig } from '@/components/category/category-config';
+import { CustomEditor } from '@/components/custom/custom-editor';
 
 export default function Home() {
-  const { activeCategoryId, activeCustomId, workspaces } = useWorkspaceStore();
+  const { activeCategoryId, activeCustomId, workspaces, getActiveCustom } = useWorkspaceStore();
+  const activeCustom = getActiveCustom();
 
-  if (activeCustomId) {
+  if (activeCustomId && activeCustom) {
     return (
       <div className="max-w-4xl">
-        <h2 className="text-2xl font-semibold mb-6">Custom Editor</h2>
-        <p className="text-gray-500">Custom editor coming in Phase 3...</p>
+        <h2 className="text-2xl font-semibold mb-6">{activeCustom.name}</h2>
+        <CustomEditor customId={activeCustomId} />
       </div>
     );
   }
