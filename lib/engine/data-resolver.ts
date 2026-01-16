@@ -12,7 +12,7 @@ export interface ResolvedData {
 
 export async function resolveData(
   customs: Custom[],
-  category: Category
+  category?: Category | null
 ): Promise<Map<string, ResolvedData>> {
   const graph = buildDependencyGraph(customs);
   const orderedIds = topologicalSort(graph);
@@ -32,7 +32,7 @@ export async function resolveData(
 
 async function resolveCustomData(
   custom: Custom,
-  category: Category,
+  category: Category | null | undefined,
   resolved: Map<string, ResolvedData>
 ): Promise<ResolvedData> {
   const data: Record<string, unknown> = {};
@@ -61,7 +61,7 @@ async function resolveCustomData(
 
 async function resolveFieldValue(
   field: Field,
-  category: Category,
+  category: Category | null | undefined,
   resolved: Map<string, ResolvedData>
 ): Promise<unknown> {
   switch (field.type) {
@@ -94,9 +94,14 @@ function resolveReference(
 
 async function resolveApiFetch(
   field: Field,
-  category: Category
+  category: Category | null | undefined
 ): Promise<unknown> {
   if (!field.apiEndpoint) {
+    return generateFieldValue({ ...field, type: 'string' });
+  }
+
+  // api-fetch requires a category for auth/headers
+  if (!category) {
     return generateFieldValue({ ...field, type: 'string' });
   }
 
@@ -109,7 +114,7 @@ async function resolveApiFetch(
 
 export async function resolveSingleCustom(
   custom: Custom,
-  category: Category
+  category?: Category | null
 ): Promise<ResolvedData> {
   const resolved = new Map<string, ResolvedData>();
   return resolveCustomData(custom, category, resolved);

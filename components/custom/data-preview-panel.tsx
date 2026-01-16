@@ -8,7 +8,7 @@ import { useState, useCallback, useEffect } from 'react';
 
 interface DataPreviewPanelProps {
   custom: Custom;
-  category: Category;
+  category?: Category | null;
 }
 
 type PreviewMode = 'generated' | 'resolved';

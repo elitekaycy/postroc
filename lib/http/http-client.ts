@@ -1,10 +1,10 @@
 import type { Custom, Category, HttpResponse } from '@/lib/types/core';
-import { buildRequestHeaders, getBaseUrl, replacePathVariables } from './request-builder';
+import { buildRequestHeaders, buildFullUrl, replacePathVariables } from './request-builder';
 import { resolveSingleCustom } from '@/lib/engine/data-resolver';
 
 export async function sendRequest(
   custom: Custom,
-  category: Category
+  category?: Category | null
 ): Promise<HttpResponse> {
   const startTime = Date.now();
 
@@ -12,12 +12,10 @@ export async function sendRequest(
     const resolved = await resolveSingleCustom(custom, category);
     const data = resolved.data;
 
-    const baseUrl = getBaseUrl(category);
     let endpoint = custom.requestConfig?.endpoint || '/';
-
     endpoint = replacePathVariables(endpoint, data);
 
-    const url = buildFullUrl(baseUrl, endpoint);
+    const url = buildFullUrl(category, endpoint);
     const headers = buildRequestHeaders(custom, category);
 
     const method = custom.requestConfig?.method || 'GET';
@@ -73,17 +71,6 @@ export async function sendRequest(
       error: error instanceof Error ? error.message : String(error),
     };
   }
-}
-
-function buildFullUrl(baseUrl: string, endpoint: string): string {
-  if (!baseUrl) {
-    return endpoint;
-  }
-
-  const normalizedBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-
-  return `${normalizedBase}${normalizedEndpoint}`;
 }
 
 export async function sendRawRequest(

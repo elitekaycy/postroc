@@ -36,7 +36,7 @@ export function CustomEditor({ customId }: CustomEditorProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
 
-  if (!custom || custom.id !== customId || !category) {
+  if (!custom || custom.id !== customId) {
     return null;
   }
 

@@ -1,30 +1,41 @@
 import type { Category, Custom, Header } from '@/lib/types/core';
 
+/**
+ * Check if a URL is absolute (starts with http:// or https://)
+ */
+export function isAbsoluteUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url);
+}
+
 export function buildRequestHeaders(
   custom: Custom,
-  category: Category
+  category?: Category | null
 ): Record<string, string> {
   const headers: Record<string, string> = {};
 
-  for (const header of category.config.defaultHeaders) {
-    if (header.enabled) {
-      headers[header.key] = header.value;
+  // Add category default headers if category exists
+  if (category) {
+    for (const header of category.config.defaultHeaders) {
+      if (header.enabled) {
+        headers[header.key] = header.value;
+      }
+    }
+
+    const { auth } = category.config;
+    if (auth.type === 'bearer' && auth.token) {
+      headers['Authorization'] = `Bearer ${auth.token}`;
+    } else if (auth.type === 'api-key' && auth.apiKeyHeader && auth.apiKeyValue) {
+      headers[auth.apiKeyHeader] = auth.apiKeyValue;
+    } else if (auth.type === 'basic' && auth.username && auth.password) {
+      const credentials = `${auth.username}:${auth.password}`;
+      const encoded = typeof btoa !== 'undefined'
+        ? btoa(credentials)
+        : Buffer.from(credentials).toString('base64');
+      headers['Authorization'] = `Basic ${encoded}`;
     }
   }
 
-  const { auth } = category.config;
-  if (auth.type === 'bearer' && auth.token) {
-    headers['Authorization'] = `Bearer ${auth.token}`;
-  } else if (auth.type === 'api-key' && auth.apiKeyHeader && auth.apiKeyValue) {
-    headers[auth.apiKeyHeader] = auth.apiKeyValue;
-  } else if (auth.type === 'basic' && auth.username && auth.password) {
-    const credentials = `${auth.username}:${auth.password}`;
-    const encoded = typeof btoa !== 'undefined'
-      ? btoa(credentials)
-      : Buffer.from(credentials).toString('base64');
-    headers['Authorization'] = `Basic ${encoded}`;
-  }
-
+  // Add custom headers
   if (custom.customHeaders) {
     for (const header of custom.customHeaders) {
       if (header.enabled) {
@@ -36,14 +47,20 @@ export function buildRequestHeaders(
   return headers;
 }
 
-export function getBaseUrl(category: Category): string {
+export function getBaseUrl(category?: Category | null): string {
+  if (!category) return '';
   const env = category.config.environments.find(
     (e) => e.name === category.config.activeEnvironment
   );
   return env?.baseUrl || '';
 }
 
-export function buildFullUrl(category: Category, endpoint: string): string {
+export function buildFullUrl(category: Category | null | undefined, endpoint: string): string {
+  // If endpoint is already an absolute URL, use it directly
+  if (isAbsoluteUrl(endpoint)) {
+    return endpoint;
+  }
+
   const baseUrl = getBaseUrl(category);
   if (!baseUrl) return endpoint;
 
@@ -87,12 +104,14 @@ export function mergeHeaders(
 
 export function getEffectiveHeaders(
   custom: Custom,
-  category: Category
+  category?: Category | null
 ): Header[] {
   const merged = mergeHeaders(
-    category.config.defaultHeaders,
+    category?.config.defaultHeaders || [],
     custom.customHeaders
   );
+
+  if (!category) return merged;
 
   const { auth } = category.config;
 
