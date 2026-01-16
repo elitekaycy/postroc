@@ -19,18 +19,22 @@ interface WorkspaceStore {
   activeProjectId: string | null;
   activeCategoryId: string | null;
   activeCustomId: string | null;
+  editingId: string | null;
 
-  createWorkspace: (name: string) => void;
+  createWorkspace: (name?: string) => string;
   updateWorkspace: (id: string, updates: Partial<Workspace>) => void;
   deleteWorkspace: (id: string) => void;
 
-  createProject: (workspaceId: string, name: string) => void;
+  createProject: (workspaceId: string, name?: string) => string | null;
   updateProject: (id: string, updates: Partial<Project>) => void;
   deleteProject: (id: string) => void;
+  reorderProjects: (workspaceId: string, projectIds: string[]) => void;
 
-  createCategory: (projectId: string, name: string) => void;
+  createCategory: (projectId: string, name?: string) => string | null;
   updateCategory: (categoryId: string, updates: Partial<Category>) => void;
   deleteCategory: (categoryId: string) => void;
+  reorderCategories: (projectId: string, categoryIds: string[]) => void;
+  moveCategory: (categoryId: string, targetProjectId: string) => void;
   updateCategoryConfig: (categoryId: string, config: Partial<CategoryConfig>) => void;
   setActiveEnvironment: (categoryId: string, env: Environment) => void;
   addEnvironment: (categoryId: string, env: EnvironmentConfig) => void;
@@ -41,9 +45,11 @@ interface WorkspaceStore {
   updateHeader: (categoryId: string, headerId: string, updates: Partial<Header>) => void;
   deleteHeader: (categoryId: string, headerId: string) => void;
 
-  createCustom: (categoryId: string, name: string) => void;
+  createCustom: (categoryId: string, name?: string) => string | null;
   updateCustom: (customId: string, updates: Partial<Custom>) => void;
   deleteCustom: (customId: string) => void;
+  reorderCustoms: (categoryId: string, customIds: string[]) => void;
+  moveCustom: (customId: string, targetCategoryId: string) => void;
 
   addField: (customId: string, field: Omit<Field, 'id'>) => void;
   updateField: (customId: string, fieldId: string, updates: Partial<Field>) => void;
@@ -54,6 +60,7 @@ interface WorkspaceStore {
   setActiveProject: (id: string | null) => void;
   setActiveCategory: (id: string | null) => void;
   setActiveCustom: (id: string | null) => void;
+  setEditingId: (id: string | null) => void;
 
   getActiveCategory: () => Category | null;
   getActiveCustom: () => Custom | null;
@@ -75,6 +82,8 @@ const createDefaultCategoryConfig = (projectId: string, name: string): CategoryC
   updatedAt: Date.now(),
 });
 
+let lastCreatedId: string | null = null;
+
 export const useWorkspaceStore = create<WorkspaceStore>()(
   immer((set, get) => ({
     workspaces: [],
@@ -82,18 +91,24 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
     activeProjectId: null,
     activeCategoryId: null,
     activeCustomId: null,
+    editingId: null,
 
-    createWorkspace: (name: string) =>
+    createWorkspace: (name?: string) => {
+      const id = crypto.randomUUID();
+      const workspaceName = name || `Workspace ${get().workspaces.length + 1}`;
       set((state) => {
         const workspace: Workspace = {
-          id: crypto.randomUUID(),
-          name,
+          id,
+          name: workspaceName,
           projects: [],
           createdAt: Date.now(),
         };
         state.workspaces.push(workspace);
-        state.activeWorkspaceId = workspace.id;
-      }),
+        state.activeWorkspaceId = id;
+        state.editingId = id;
+      });
+      return id;
+    },
 
     updateWorkspace: (id: string, updates: Partial<Workspace>) =>
       set((state) => {
@@ -114,21 +129,29 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
         }
       }),
 
-    createProject: (workspaceId: string, name: string) =>
+    createProject: (workspaceId: string, name?: string) => {
+      const workspace = get().workspaces.find((w) => w.id === workspaceId);
+      if (!workspace) return null;
+
+      const id = crypto.randomUUID();
+      const projectName = name || `Project ${workspace.projects.length + 1}`;
       set((state) => {
-        const workspace = state.workspaces.find((w) => w.id === workspaceId);
-        if (workspace) {
+        const ws = state.workspaces.find((w) => w.id === workspaceId);
+        if (ws) {
           const project: Project = {
-            id: crypto.randomUUID(),
-            name,
+            id,
+            name: projectName,
             workspaceId,
             categories: [],
             createdAt: Date.now(),
           };
-          workspace.projects.push(project);
-          state.activeProjectId = project.id;
+          ws.projects.push(project);
+          state.activeProjectId = id;
+          state.editingId = id;
         }
-      }),
+      });
+      return id;
+    },
 
     updateProject: (id: string, updates: Partial<Project>) =>
       set((state) => {
@@ -153,26 +176,52 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
         }
       }),
 
-    createCategory: (projectId: string, name: string) =>
+    reorderProjects: (workspaceId: string, projectIds: string[]) =>
+      set((state) => {
+        const workspace = state.workspaces.find((w) => w.id === workspaceId);
+        if (workspace) {
+          const projectMap = new Map(workspace.projects.map((p) => [p.id, p]));
+          const reordered: Project[] = [];
+          for (const id of projectIds) {
+            const project = projectMap.get(id);
+            if (project) reordered.push(project);
+          }
+          workspace.projects = reordered;
+        }
+      }),
+
+    createCategory: (projectId: string, name?: string) => {
+      let project: Project | undefined;
+      for (const workspace of get().workspaces) {
+        project = workspace.projects.find((p) => p.id === projectId);
+        if (project) break;
+      }
+      if (!project) return null;
+
+      const id = crypto.randomUUID();
+      const categoryName = name || `Category ${project.categories.length + 1}`;
       set((state) => {
         for (const workspace of state.workspaces) {
-          const project = workspace.projects.find((p) => p.id === projectId);
-          if (project) {
+          const proj = workspace.projects.find((p) => p.id === projectId);
+          if (proj) {
             const category: Category = {
-              id: crypto.randomUUID(),
-              name,
+              id,
+              name: categoryName,
               projectId,
-              config: createDefaultCategoryConfig(projectId, name),
+              config: createDefaultCategoryConfig(projectId, categoryName),
               customs: [],
               createdAt: Date.now(),
               updatedAt: Date.now(),
             };
-            project.categories.push(category);
-            state.activeCategoryId = category.id;
+            proj.categories.push(category);
+            state.activeCategoryId = id;
+            state.editingId = id;
             return;
           }
         }
-      }),
+      });
+      return id;
+    },
 
     updateCategory: (categoryId: string, updates: Partial<Category>) =>
       set((state) => {
@@ -198,6 +247,54 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
         if (state.activeCategoryId === categoryId) {
           state.activeCategoryId = null;
           state.activeCustomId = null;
+        }
+      }),
+
+    reorderCategories: (projectId: string, categoryIds: string[]) =>
+      set((state) => {
+        for (const workspace of state.workspaces) {
+          const project = workspace.projects.find((p) => p.id === projectId);
+          if (project) {
+            const categoryMap = new Map(project.categories.map((c) => [c.id, c]));
+            const reordered: Category[] = [];
+            for (const id of categoryIds) {
+              const category = categoryMap.get(id);
+              if (category) reordered.push(category);
+            }
+            project.categories = reordered;
+            return;
+          }
+        }
+      }),
+
+    moveCategory: (categoryId: string, targetProjectId: string) =>
+      set((state) => {
+        let category: Category | undefined;
+        let sourceProject: Project | undefined;
+
+        for (const workspace of state.workspaces) {
+          for (const project of workspace.projects) {
+            const found = project.categories.find((c) => c.id === categoryId);
+            if (found) {
+              category = found;
+              sourceProject = project;
+              break;
+            }
+          }
+          if (category) break;
+        }
+
+        if (!category || !sourceProject) return;
+
+        sourceProject.categories = sourceProject.categories.filter((c) => c.id !== categoryId);
+
+        for (const workspace of state.workspaces) {
+          const targetProject = workspace.projects.find((p) => p.id === targetProjectId);
+          if (targetProject) {
+            category.projectId = targetProjectId;
+            targetProject.categories.push(category);
+            return;
+          }
         }
       }),
 
@@ -345,27 +442,42 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
         }
       }),
 
-    createCustom: (categoryId: string, name: string) =>
+    createCustom: (categoryId: string, name?: string) => {
+      let category: Category | undefined;
+      for (const workspace of get().workspaces) {
+        for (const project of workspace.projects) {
+          category = project.categories.find((c) => c.id === categoryId);
+          if (category) break;
+        }
+        if (category) break;
+      }
+      if (!category) return null;
+
+      const id = crypto.randomUUID();
+      const customName = name || `Custom ${category.customs.length + 1}`;
       set((state) => {
         for (const workspace of state.workspaces) {
           for (const project of workspace.projects) {
-            const category = project.categories.find((c) => c.id === categoryId);
-            if (category) {
+            const cat = project.categories.find((c) => c.id === categoryId);
+            if (cat) {
               const custom: Custom = {
-                id: crypto.randomUUID(),
-                name,
+                id,
+                name: customName,
                 categoryId,
                 fields: [],
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
               };
-              category.customs.push(custom);
-              state.activeCustomId = custom.id;
+              cat.customs.push(custom);
+              state.activeCustomId = id;
+              state.editingId = id;
               return;
             }
           }
         }
-      }),
+      });
+      return id;
+    },
 
     updateCustom: (customId: string, updates: Partial<Custom>) =>
       set((state) => {
@@ -394,6 +506,61 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
         }
         if (state.activeCustomId === customId) {
           state.activeCustomId = null;
+        }
+      }),
+
+    reorderCustoms: (categoryId: string, customIds: string[]) =>
+      set((state) => {
+        for (const workspace of state.workspaces) {
+          for (const project of workspace.projects) {
+            const category = project.categories.find((c) => c.id === categoryId);
+            if (category) {
+              const customMap = new Map(category.customs.map((c) => [c.id, c]));
+              const reordered: Custom[] = [];
+              for (const id of customIds) {
+                const custom = customMap.get(id);
+                if (custom) reordered.push(custom);
+              }
+              category.customs = reordered;
+              return;
+            }
+          }
+        }
+      }),
+
+    moveCustom: (customId: string, targetCategoryId: string) =>
+      set((state) => {
+        let custom: Custom | undefined;
+        let sourceCategory: Category | undefined;
+
+        for (const workspace of state.workspaces) {
+          for (const project of workspace.projects) {
+            for (const category of project.categories) {
+              const found = category.customs.find((c) => c.id === customId);
+              if (found) {
+                custom = found;
+                sourceCategory = category;
+                break;
+              }
+            }
+            if (custom) break;
+          }
+          if (custom) break;
+        }
+
+        if (!custom || !sourceCategory) return;
+
+        sourceCategory.customs = sourceCategory.customs.filter((c) => c.id !== customId);
+
+        for (const workspace of state.workspaces) {
+          for (const project of workspace.projects) {
+            const targetCategory = project.categories.find((c) => c.id === targetCategoryId);
+            if (targetCategory) {
+              custom.categoryId = targetCategoryId;
+              targetCategory.customs.push(custom);
+              return;
+            }
+          }
         }
       }),
 
@@ -505,6 +672,11 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
     setActiveCustom: (id: string | null) =>
       set((state) => {
         state.activeCustomId = id;
+      }),
+
+    setEditingId: (id: string | null) =>
+      set((state) => {
+        state.editingId = id;
       }),
 
     getActiveCategory: () => {
