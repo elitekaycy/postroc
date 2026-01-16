@@ -1,9 +1,9 @@
 'use client';
 
-import { useWorkspaceStore } from '@/lib/store/workspace-store';
 import type { Custom, Category } from '@/lib/types/core';
 import { generatePreviewData, resolveSingleCustom, ResolvedData } from '@/lib/engine/data-resolver';
-import { RefreshCw, Play, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
+import { exportData, downloadExport, copyToClipboard, ExportFormat } from '@/lib/export/exporters';
+import { RefreshCw, Play, ChevronDown, ChevronUp, AlertCircle, Copy, Download, Check } from 'lucide-react';
 import { useState, useCallback, useEffect } from 'react';
 
 interface DataPreviewPanelProps {
@@ -12,7 +12,6 @@ interface DataPreviewPanelProps {
 }
 
 type PreviewMode = 'generated' | 'resolved';
-type ExportFormat = 'json' | 'xml' | 'form-data' | 'url-encoded';
 
 export function DataPreviewPanel({ custom, category }: DataPreviewPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
@@ -22,6 +21,7 @@ export function DataPreviewPanel({ custom, category }: DataPreviewPanelProps) {
   const [resolvedData, setResolvedData] = useState<ResolvedData | null>(null);
   const [isResolving, setIsResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const regeneratePreview = useCallback(() => {
     setPreviewData(generatePreviewData(custom));
@@ -51,24 +51,18 @@ export function DataPreviewPanel({ custom, category }: DataPreviewPanelProps) {
     ? resolvedData.data
     : previewData;
 
-  const formatData = (data: Record<string, unknown>, format: ExportFormat): string => {
-    switch (format) {
-      case 'json':
-        return JSON.stringify(data, null, 2);
-
-      case 'xml':
-        return toXml(data);
-
-      case 'form-data':
-        return toFormData(data);
-
-      case 'url-encoded':
-        return toUrlEncoded(data);
-
-      default:
-        return JSON.stringify(data, null, 2);
-    }
+  const handleCopy = async () => {
+    await copyToClipboard(currentData, { format: exportFormat });
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
+
+  const handleDownload = () => {
+    const filename = `${custom.name}-${previewMode}`;
+    downloadExport(currentData, filename, { format: exportFormat });
+  };
+
+  const formattedData = exportData(currentData, { format: exportFormat });
 
   return (
     <section>
@@ -129,16 +123,36 @@ export function DataPreviewPanel({ custom, category }: DataPreviewPanelProps) {
                 Resolved
               </button>
             </div>
-            <select
-              value={exportFormat}
-              onChange={(e) => setExportFormat(e.target.value as ExportFormat)}
-              className="px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--background)]"
-            >
-              <option value="json">JSON</option>
-              <option value="xml">XML</option>
-              <option value="form-data">Form Data</option>
-              <option value="url-encoded">URL Encoded</option>
-            </select>
+            <div className="flex items-center gap-2">
+              <select
+                value={exportFormat}
+                onChange={(e) => setExportFormat(e.target.value as ExportFormat)}
+                className="px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--background)]"
+              >
+                <option value="json">JSON</option>
+                <option value="xml">XML</option>
+                <option value="form-data">Form Data</option>
+                <option value="url-encoded">URL Encoded</option>
+              </select>
+              <button
+                onClick={handleCopy}
+                className="p-1.5 hover:bg-[var(--hover)] rounded"
+                title="Copy to clipboard"
+              >
+                {copied ? (
+                  <Check className="w-4 h-4 text-green-600" />
+                ) : (
+                  <Copy className="w-4 h-4" />
+                )}
+              </button>
+              <button
+                onClick={handleDownload}
+                className="p-1.5 hover:bg-[var(--hover)] rounded"
+                title="Download"
+              >
+                <Download className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {resolveError && (
@@ -162,100 +176,10 @@ export function DataPreviewPanel({ custom, category }: DataPreviewPanelProps) {
           )}
 
           <pre className="p-4 text-sm font-mono overflow-auto max-h-64 whitespace-pre-wrap break-words">
-            {formatData(currentData, exportFormat)}
+            {formattedData}
           </pre>
         </div>
       )}
     </section>
   );
-}
-
-function toXml(data: Record<string, unknown>, rootName = 'root'): string {
-  const escapeXml = (str: string): string =>
-    str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&apos;');
-
-  const convert = (value: unknown, key: string): string => {
-    if (value === null || value === undefined) {
-      return `<${key}/>`;
-    }
-
-    if (Array.isArray(value)) {
-      return value.map((item, i) => convert(item, `item`)).join('\n');
-    }
-
-    if (typeof value === 'object') {
-      const inner = Object.entries(value as Record<string, unknown>)
-        .map(([k, v]) => convert(v, k))
-        .join('\n');
-      return `<${key}>\n${inner}\n</${key}>`;
-    }
-
-    return `<${key}>${escapeXml(String(value))}</${key}>`;
-  };
-
-  const inner = Object.entries(data)
-    .map(([k, v]) => convert(v, k))
-    .join('\n');
-
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<${rootName}>\n${inner}\n</${rootName}>`;
-}
-
-function toFormData(data: Record<string, unknown>): string {
-  const lines: string[] = [];
-
-  const flatten = (obj: unknown, prefix = ''): void => {
-    if (obj === null || obj === undefined) {
-      lines.push(`${prefix}: (empty)`);
-      return;
-    }
-
-    if (Array.isArray(obj)) {
-      obj.forEach((item, i) => flatten(item, `${prefix}[${i}]`));
-      return;
-    }
-
-    if (typeof obj === 'object') {
-      Object.entries(obj as Record<string, unknown>).forEach(([k, v]) => {
-        flatten(v, prefix ? `${prefix}[${k}]` : k);
-      });
-      return;
-    }
-
-    lines.push(`${prefix}: ${String(obj)}`);
-  };
-
-  flatten(data);
-  return lines.join('\n');
-}
-
-function toUrlEncoded(data: Record<string, unknown>): string {
-  const pairs: string[] = [];
-
-  const flatten = (obj: unknown, prefix = ''): void => {
-    if (obj === null || obj === undefined) {
-      return;
-    }
-
-    if (Array.isArray(obj)) {
-      obj.forEach((item, i) => flatten(item, `${prefix}[${i}]`));
-      return;
-    }
-
-    if (typeof obj === 'object') {
-      Object.entries(obj as Record<string, unknown>).forEach(([k, v]) => {
-        flatten(v, prefix ? `${prefix}[${k}]` : k);
-      });
-      return;
-    }
-
-    pairs.push(`${encodeURIComponent(prefix)}=${encodeURIComponent(String(obj))}`);
-  };
-
-  flatten(data);
-  return pairs.join('&');
 }
