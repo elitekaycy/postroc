@@ -204,16 +204,18 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
   return (
     <div className="w-64 border-r border-[var(--border)] bg-[var(--sidebar-bg)] flex flex-col overflow-hidden">
       <div className="p-3 border-b border-[var(--border)] flex items-center justify-between">
-        <EditableText
-          value={activeWorkspace?.name || 'Workspace'}
-          isEditing={editingId === activeWorkspaceId}
-          onSave={(name) => {
-            if (activeWorkspaceId) updateWorkspace(activeWorkspaceId, { name });
-            setEditingId(null);
-          }}
-          onCancel={() => setEditingId(null)}
-          className="font-semibold text-sm"
-        />
+        <div onDoubleClick={() => setEditingId(activeWorkspaceId)}>
+          <EditableText
+            value={activeWorkspace?.name || 'Workspace'}
+            isEditing={editingId === activeWorkspaceId}
+            onSave={(name) => {
+              if (activeWorkspaceId) updateWorkspace(activeWorkspaceId, { name });
+              setEditingId(null);
+            }}
+            onCancel={() => setEditingId(null)}
+            className="font-semibold text-sm"
+          />
+        </div>
         <div className="flex items-center gap-1">
           <button
             onClick={() => activeWorkspaceId && createProject(activeWorkspaceId)}
@@ -254,6 +256,7 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
                   toggleProject(project.id);
                   setActiveProject(project.id);
                 }}
+                onStartEdit={(id) => setEditingId(id)}
                 onUpdateName={(name) => {
                   updateProject(project.id, { name });
                   setEditingId(null);
@@ -305,6 +308,7 @@ interface SortableProjectProps {
   expandedCategories: Set<string>;
   onToggle: () => void;
   onSelect: () => void;
+  onStartEdit: (id: string) => void;
   onUpdateName: (name: string) => void;
   onCancelEdit: () => void;
   onDelete: () => void;
@@ -329,6 +333,7 @@ function SortableProject({
   expandedCategories,
   onToggle,
   onSelect,
+  onStartEdit,
   onUpdateName,
   onCancelEdit,
   onDelete,
@@ -371,13 +376,15 @@ function SortableProject({
           )}
         </button>
         <FolderKanban className="w-4 h-4 text-amber-500 mr-2" />
-        <EditableText
-          value={project.name}
-          isEditing={editingId === project.id}
-          onSave={onUpdateName}
-          onCancel={onCancelEdit}
-          className="flex-1 text-sm"
-        />
+        <div className="flex-1" onDoubleClick={() => onStartEdit(project.id)}>
+          <EditableText
+            value={project.name}
+            isEditing={editingId === project.id}
+            onSave={onUpdateName}
+            onCancel={onCancelEdit}
+            className="text-sm"
+          />
+        </div>
         <div className="flex items-center gap-0.5 pr-1 opacity-0 group-hover:opacity-100">
           <button onClick={onAddCategory} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded" title="Add Category">
             <Plus className="w-3 h-3" />
@@ -405,6 +412,7 @@ function SortableProject({
                 activeCustomId={activeCustomId}
                 onToggle={() => onToggleCategory(category.id)}
                 onSelect={() => onSelectCategory(category.id)}
+                onStartEdit={onStartEdit}
                 onUpdateName={(name) => onUpdateCategory(category.id, name)}
                 onCancelEdit={onCancelEdit}
                 onDelete={() => onDeleteCategory(category.id)}
@@ -430,6 +438,7 @@ interface SortableCategoryProps {
   activeCustomId: string | null;
   onToggle: () => void;
   onSelect: () => void;
+  onStartEdit: (id: string) => void;
   onUpdateName: (name: string) => void;
   onCancelEdit: () => void;
   onDelete: () => void;
@@ -448,6 +457,7 @@ function SortableCategory({
   activeCustomId,
   onToggle,
   onSelect,
+  onStartEdit,
   onUpdateName,
   onCancelEdit,
   onDelete,
@@ -485,13 +495,15 @@ function SortableCategory({
           )}
         </button>
         <Layers className="w-3.5 h-3.5 text-blue-500 mr-2" />
-        <EditableText
-          value={category.name}
-          isEditing={editingId === category.id}
-          onSave={onUpdateName}
-          onCancel={onCancelEdit}
-          className="flex-1 text-sm"
-        />
+        <div className="flex-1" onDoubleClick={() => onStartEdit(category.id)}>
+          <EditableText
+            value={category.name}
+            isEditing={editingId === category.id}
+            onSave={onUpdateName}
+            onCancel={onCancelEdit}
+            className="text-sm"
+          />
+        </div>
         <span className="text-xs text-gray-500 mr-1">{category.customs.length}</span>
         <div className="flex items-center gap-0.5 pr-1 opacity-0 group-hover:opacity-100">
           <button onClick={onAddCustom} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded" title="Add Custom">
@@ -517,6 +529,7 @@ function SortableCategory({
                 isActive={activeCustomId === custom.id}
                 editingId={editingId}
                 onSelect={() => onSelectCustom(custom.id)}
+                onStartEdit={onStartEdit}
                 onUpdateName={(name) => onUpdateCustom(custom.id, name)}
                 onCancelEdit={onCancelEdit}
                 onDelete={() => onDeleteCustom(custom.id)}
@@ -535,6 +548,7 @@ interface SortableCustomProps {
   isActive: boolean;
   editingId: string | null;
   onSelect: () => void;
+  onStartEdit: (id: string) => void;
   onUpdateName: (name: string) => void;
   onCancelEdit: () => void;
   onDelete: () => void;
@@ -546,6 +560,7 @@ function SortableCustom({
   isActive,
   editingId,
   onSelect,
+  onStartEdit,
   onUpdateName,
   onCancelEdit,
   onDelete,
@@ -573,13 +588,14 @@ function SortableCustom({
         </button>
         <button onClick={onSelect} className="flex-1 flex items-center gap-2 py-1.5 text-sm text-left">
           <FileCode2 className="w-3.5 h-3.5 text-green-500" />
-          <EditableText
-            value={custom.name}
-            isEditing={editingId === custom.id}
-            onSave={onUpdateName}
-            onCancel={onCancelEdit}
-            className="flex-1"
-          />
+          <div className="flex-1" onDoubleClick={(e) => { e.stopPropagation(); onStartEdit(custom.id); }}>
+            <EditableText
+              value={custom.name}
+              isEditing={editingId === custom.id}
+              onSave={onUpdateName}
+              onCancel={onCancelEdit}
+            />
+          </div>
         </button>
         <button
           onClick={onDelete}
