@@ -5,6 +5,7 @@ import type { Custom, HttpMethod, HttpResponse, FieldType } from '@/lib/types/co
 import { sendRequest } from '@/lib/http/http-client';
 import { generatePreviewData } from '@/lib/engine/data-resolver';
 import { ResponseViewer } from '@/components/http/response-viewer';
+import { ReferenceSelector } from '@/components/custom/reference-selector';
 import { Trash2, Plus, Play, RefreshCw } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 
@@ -186,12 +187,10 @@ export function CustomEditor({ customId }: CustomEditorProps) {
                   </select>
 
                   {field.type === 'reference' ? (
-                    <input
-                      type="text"
-                      value={field.referenceId || ''}
-                      onChange={(e) => updateField(customId, field.id, { referenceId: e.target.value })}
-                      placeholder="Reference ID"
-                      className="px-3 py-1.5 text-sm border border-[var(--border)] rounded bg-[var(--background)]"
+                    <ReferenceSelector
+                      currentCustomId={customId}
+                      value={field.referenceId}
+                      onChange={(referenceId) => updateField(customId, field.id, { referenceId })}
                     />
                   ) : field.type === 'api-fetch' ? (
                     <input
