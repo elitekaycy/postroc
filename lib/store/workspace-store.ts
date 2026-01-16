@@ -12,6 +12,10 @@ import type {
   Header,
   Field,
 } from '@/lib/types/core';
+import {
+  populateFieldsFromObject,
+  extractFieldsFromResponse,
+} from '@/lib/engine/field-populator';
 
 interface WorkspaceStore {
   workspaces: Workspace[];
@@ -55,6 +59,7 @@ interface WorkspaceStore {
   updateField: (customId: string, fieldId: string, updates: Partial<Field>) => void;
   deleteField: (customId: string, fieldId: string) => void;
   reorderFields: (customId: string, fieldIds: string[]) => void;
+  populateFieldsFromResponse: (customId: string, data: Record<string, unknown>) => void;
 
   setActiveWorkspace: (id: string | null) => void;
   setActiveProject: (id: string | null) => void;
@@ -741,6 +746,52 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
         }
       }),
 
+    populateFieldsFromResponse: (customId: string, data: Record<string, unknown>) =>
+      set((state) => {
+        // Extract fields from response (handles nested data patterns)
+        const extractedData = extractFieldsFromResponse(data);
+        const newFieldDefs = populateFieldsFromObject(extractedData);
+
+        for (const workspace of state.workspaces) {
+          for (const project of workspace.projects) {
+            // Check project-level customs
+            const projectCustom = project.customs.find((c) => c.id === customId);
+            if (projectCustom) {
+              const existingKeys = new Set(projectCustom.fields.map((f) => f.key));
+              // Only add fields that don't already exist
+              for (const fieldDef of newFieldDefs) {
+                if (!existingKeys.has(fieldDef.key)) {
+                  projectCustom.fields.push({
+                    ...fieldDef,
+                    id: crypto.randomUUID(),
+                  });
+                }
+              }
+              projectCustom.updatedAt = Date.now();
+              return;
+            }
+            // Check category-level customs
+            for (const category of project.categories) {
+              const custom = category.customs.find((c) => c.id === customId);
+              if (custom) {
+                const existingKeys = new Set(custom.fields.map((f) => f.key));
+                // Only add fields that don't already exist
+                for (const fieldDef of newFieldDefs) {
+                  if (!existingKeys.has(fieldDef.key)) {
+                    custom.fields.push({
+                      ...fieldDef,
+                      id: crypto.randomUUID(),
+                    });
+                  }
+                }
+                custom.updatedAt = Date.now();
+                return;
+              }
+            }
+          }
+        }
+      }),
+
     setActiveWorkspace: (id: string | null) =>
       set((state) => {
         state.activeWorkspaceId = id;
@@ -763,9 +814,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
     setActiveCategory: (id: string | null) =>
       set((state) => {
         state.activeCategoryId = id;
-        if (!id) {
-          state.activeCustomId = null;
-        }
+        state.activeCustomId = null;
       }),
 
     setActiveCustom: (id: string | null) =>

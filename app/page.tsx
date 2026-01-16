@@ -10,9 +10,11 @@ export default function Home() {
 
   if (activeCustomId && activeCustom) {
     return (
-      <div className="max-w-4xl">
-        <h2 className="text-2xl font-semibold mb-6">{activeCustom.name}</h2>
-        <CustomEditor customId={activeCustomId} />
+      <div className="h-full flex flex-col">
+        <h2 className="text-xl font-semibold mb-4 flex-shrink-0">{activeCustom.name}</h2>
+        <div className="flex-1 min-h-0">
+          <CustomEditor customId={activeCustomId} />
+        </div>
       </div>
     );
   }
