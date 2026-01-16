@@ -45,11 +45,11 @@ interface WorkspaceStore {
   updateHeader: (categoryId: string, headerId: string, updates: Partial<Header>) => void;
   deleteHeader: (categoryId: string, headerId: string) => void;
 
-  createCustom: (categoryId: string, name?: string) => string | null;
+  createCustom: (projectId: string, categoryId?: string, name?: string) => string | null;
   updateCustom: (customId: string, updates: Partial<Custom>) => void;
   deleteCustom: (customId: string) => void;
-  reorderCustoms: (categoryId: string, customIds: string[]) => void;
-  moveCustom: (customId: string, targetCategoryId: string) => void;
+  reorderCustoms: (parentId: string, customIds: string[], isCategory?: boolean) => void;
+  moveCustom: (customId: string, targetProjectId: string, targetCategoryId?: string) => void;
 
   addField: (customId: string, field: Omit<Field, 'id'>) => void;
   updateField: (customId: string, fieldId: string, updates: Partial<Field>) => void;
@@ -143,6 +143,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
             name: projectName,
             workspaceId,
             categories: [],
+            customs: [],
             createdAt: Date.now(),
           };
           ws.projects.push(project);
@@ -442,37 +443,51 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
         }
       }),
 
-    createCustom: (categoryId: string, name?: string) => {
+    createCustom: (projectId: string, categoryId?: string, name?: string) => {
+      let project: Project | undefined;
       let category: Category | undefined;
-      for (const workspace of get().workspaces) {
-        for (const project of workspace.projects) {
-          category = project.categories.find((c) => c.id === categoryId);
-          if (category) break;
-        }
-        if (category) break;
-      }
-      if (!category) return null;
 
+      for (const workspace of get().workspaces) {
+        project = workspace.projects.find((p) => p.id === projectId);
+        if (project) {
+          if (categoryId) {
+            category = project.categories.find((c) => c.id === categoryId);
+          }
+          break;
+        }
+      }
+      if (!project) return null;
+
+      const existingCount = categoryId && category
+        ? category.customs.length
+        : project.customs.length;
       const id = crypto.randomUUID();
-      const customName = name || `Custom ${category.customs.length + 1}`;
+      const customName = name || `Custom ${existingCount + 1}`;
+
       set((state) => {
         for (const workspace of state.workspaces) {
-          for (const project of workspace.projects) {
-            const cat = project.categories.find((c) => c.id === categoryId);
-            if (cat) {
-              const custom: Custom = {
-                id,
-                name: customName,
-                categoryId,
-                fields: [],
-                createdAt: Date.now(),
-                updatedAt: Date.now(),
-              };
-              cat.customs.push(custom);
-              state.activeCustomId = id;
-              state.editingId = id;
-              return;
+          const proj = workspace.projects.find((p) => p.id === projectId);
+          if (proj) {
+            const custom: Custom = {
+              id,
+              name: customName,
+              projectId,
+              categoryId,
+              fields: [],
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            };
+            if (categoryId) {
+              const cat = proj.categories.find((c) => c.id === categoryId);
+              if (cat) {
+                cat.customs.push(custom);
+              }
+            } else {
+              proj.customs.push(custom);
             }
+            state.activeCustomId = id;
+            state.editingId = id;
+            return;
           }
         }
       });
@@ -483,6 +498,14 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
       set((state) => {
         for (const workspace of state.workspaces) {
           for (const project of workspace.projects) {
+            // Check project-level customs
+            const projectCustom = project.customs.find((c) => c.id === customId);
+            if (projectCustom) {
+              Object.assign(projectCustom, updates);
+              projectCustom.updatedAt = Date.now();
+              return;
+            }
+            // Check category-level customs
             for (const category of project.categories) {
               const custom = category.customs.find((c) => c.id === customId);
               if (custom) {
@@ -499,6 +522,9 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
       set((state) => {
         for (const workspace of state.workspaces) {
           for (const project of workspace.projects) {
+            // Delete from project-level customs
+            project.customs = project.customs.filter((c) => c.id !== customId);
+            // Delete from category-level customs
             for (const category of project.categories) {
               category.customs = category.customs.filter((c) => c.id !== customId);
             }
@@ -509,36 +535,58 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
         }
       }),
 
-    reorderCustoms: (categoryId: string, customIds: string[]) =>
+    reorderCustoms: (parentId: string, customIds: string[], isCategory = false) =>
       set((state) => {
         for (const workspace of state.workspaces) {
           for (const project of workspace.projects) {
-            const category = project.categories.find((c) => c.id === categoryId);
-            if (category) {
-              const customMap = new Map(category.customs.map((c) => [c.id, c]));
+            if (isCategory) {
+              const category = project.categories.find((c) => c.id === parentId);
+              if (category) {
+                const customMap = new Map(category.customs.map((c) => [c.id, c]));
+                const reordered: Custom[] = [];
+                for (const id of customIds) {
+                  const custom = customMap.get(id);
+                  if (custom) reordered.push(custom);
+                }
+                category.customs = reordered;
+                return;
+              }
+            } else if (project.id === parentId) {
+              const customMap = new Map(project.customs.map((c) => [c.id, c]));
               const reordered: Custom[] = [];
               for (const id of customIds) {
                 const custom = customMap.get(id);
                 if (custom) reordered.push(custom);
               }
-              category.customs = reordered;
+              project.customs = reordered;
               return;
             }
           }
         }
       }),
 
-    moveCustom: (customId: string, targetCategoryId: string) =>
+    moveCustom: (customId: string, targetProjectId: string, targetCategoryId?: string) =>
       set((state) => {
         let custom: Custom | undefined;
+        let sourceProject: Project | undefined;
         let sourceCategory: Category | undefined;
 
+        // Find the custom
         for (const workspace of state.workspaces) {
           for (const project of workspace.projects) {
+            // Check project-level customs
+            const projectCustom = project.customs.find((c) => c.id === customId);
+            if (projectCustom) {
+              custom = projectCustom;
+              sourceProject = project;
+              break;
+            }
+            // Check category-level customs
             for (const category of project.categories) {
               const found = category.customs.find((c) => c.id === customId);
               if (found) {
                 custom = found;
+                sourceProject = project;
                 sourceCategory = category;
                 break;
               }
@@ -548,18 +596,31 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
           if (custom) break;
         }
 
-        if (!custom || !sourceCategory) return;
+        if (!custom || !sourceProject) return;
 
-        sourceCategory.customs = sourceCategory.customs.filter((c) => c.id !== customId);
+        // Remove from source
+        if (sourceCategory) {
+          sourceCategory.customs = sourceCategory.customs.filter((c) => c.id !== customId);
+        } else {
+          sourceProject.customs = sourceProject.customs.filter((c) => c.id !== customId);
+        }
 
+        // Add to target
         for (const workspace of state.workspaces) {
-          for (const project of workspace.projects) {
-            const targetCategory = project.categories.find((c) => c.id === targetCategoryId);
-            if (targetCategory) {
-              custom.categoryId = targetCategoryId;
-              targetCategory.customs.push(custom);
-              return;
+          const targetProject = workspace.projects.find((p) => p.id === targetProjectId);
+          if (targetProject) {
+            custom.projectId = targetProjectId;
+            custom.categoryId = targetCategoryId;
+
+            if (targetCategoryId) {
+              const targetCategory = targetProject.categories.find((c) => c.id === targetCategoryId);
+              if (targetCategory) {
+                targetCategory.customs.push(custom);
+              }
+            } else {
+              targetProject.customs.push(custom);
             }
+            return;
           }
         }
       }),
@@ -568,13 +629,18 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
       set((state) => {
         for (const workspace of state.workspaces) {
           for (const project of workspace.projects) {
+            // Check project-level customs
+            const projectCustom = project.customs.find((c) => c.id === customId);
+            if (projectCustom) {
+              projectCustom.fields.push({ ...field, id: crypto.randomUUID() });
+              projectCustom.updatedAt = Date.now();
+              return;
+            }
+            // Check category-level customs
             for (const category of project.categories) {
               const custom = category.customs.find((c) => c.id === customId);
               if (custom) {
-                custom.fields.push({
-                  ...field,
-                  id: crypto.randomUUID(),
-                });
+                custom.fields.push({ ...field, id: crypto.randomUUID() });
                 custom.updatedAt = Date.now();
                 return;
               }
@@ -587,6 +653,17 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
       set((state) => {
         for (const workspace of state.workspaces) {
           for (const project of workspace.projects) {
+            // Check project-level customs
+            const projectCustom = project.customs.find((c) => c.id === customId);
+            if (projectCustom) {
+              const field = projectCustom.fields.find((f) => f.id === fieldId);
+              if (field) {
+                Object.assign(field, updates);
+                projectCustom.updatedAt = Date.now();
+              }
+              return;
+            }
+            // Check category-level customs
             for (const category of project.categories) {
               const custom = category.customs.find((c) => c.id === customId);
               if (custom) {
@@ -606,6 +683,14 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
       set((state) => {
         for (const workspace of state.workspaces) {
           for (const project of workspace.projects) {
+            // Check project-level customs
+            const projectCustom = project.customs.find((c) => c.id === customId);
+            if (projectCustom) {
+              projectCustom.fields = projectCustom.fields.filter((f) => f.id !== fieldId);
+              projectCustom.updatedAt = Date.now();
+              return;
+            }
+            // Check category-level customs
             for (const category of project.categories) {
               const custom = category.customs.find((c) => c.id === customId);
               if (custom) {
@@ -622,6 +707,20 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
       set((state) => {
         for (const workspace of state.workspaces) {
           for (const project of workspace.projects) {
+            // Check project-level customs
+            const projectCustom = project.customs.find((c) => c.id === customId);
+            if (projectCustom) {
+              const fieldMap = new Map(projectCustom.fields.map((f) => [f.id, f]));
+              const reordered: Field[] = [];
+              for (const id of fieldIds) {
+                const field = fieldMap.get(id);
+                if (field) reordered.push(field);
+              }
+              projectCustom.fields = reordered;
+              projectCustom.updatedAt = Date.now();
+              return;
+            }
+            // Check category-level customs
             for (const category of project.categories) {
               const custom = category.customs.find((c) => c.id === customId);
               if (custom) {
@@ -696,6 +795,12 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
       const state = get();
       for (const workspace of state.workspaces) {
         for (const project of workspace.projects) {
+          // Check project-level customs
+          const projectCustom = project.customs.find((c) => c.id === state.activeCustomId);
+          if (projectCustom) {
+            return projectCustom;
+          }
+          // Check category-level customs
           for (const category of project.categories) {
             const custom = category.customs.find((c) => c.id === state.activeCustomId);
             if (custom) {

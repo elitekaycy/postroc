@@ -5,7 +5,6 @@ import { EditableText } from './editable-text';
 import {
   DndContext,
   DragEndEvent,
-  DragOverEvent,
   DragStartEvent,
   DragOverlay,
   closestCenter,
@@ -22,16 +21,16 @@ import { CSS } from '@dnd-kit/utilities';
 import {
   ChevronDown,
   ChevronRight,
-  FolderKanban,
-  Layers,
-  FileCode2,
+  Folder,
+  Box,
+  FileCode,
   Plus,
   Trash2,
   GripVertical,
   PanelLeftClose,
   PanelLeft,
 } from 'lucide-react';
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -74,30 +73,26 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
+      activationConstraint: { distance: 8 },
     })
   );
 
   const toggleProject = (projectId: string) => {
-    const newExpanded = new Set(expandedProjects);
-    if (newExpanded.has(projectId)) {
-      newExpanded.delete(projectId);
-    } else {
-      newExpanded.add(projectId);
-    }
-    setExpandedProjects(newExpanded);
+    setExpandedProjects((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      return next;
+    });
   };
 
   const toggleCategory = (categoryId: string) => {
-    const newExpanded = new Set(expandedCategories);
-    if (newExpanded.has(categoryId)) {
-      newExpanded.delete(categoryId);
-    } else {
-      newExpanded.add(categoryId);
-    }
-    setExpandedCategories(newExpanded);
+    setExpandedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(categoryId)) next.delete(categoryId);
+      else next.add(categoryId);
+      return next;
+    });
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -112,55 +107,64 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
 
     if (!over || active.id === over.id) return;
 
-    const activeData = active.data.current as { type: string; parentId: string };
-    const overData = over.data.current as { type: string; parentId: string };
+    const activeData = active.data.current as { type: string; parentId: string; projectId?: string; isCategory?: boolean };
+    const overData = over.data.current as { type: string; parentId: string; projectId?: string; isCategory?: boolean };
 
     if (activeData.type === 'project' && overData.type === 'project') {
       const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
       if (workspace) {
-        const oldIndex = workspace.projects.findIndex((p) => p.id === active.id);
-        const newIndex = workspace.projects.findIndex((p) => p.id === over.id);
-        const newOrder = [...workspace.projects.map((p) => p.id)];
-        newOrder.splice(oldIndex, 1);
-        newOrder.splice(newIndex, 0, String(active.id));
-        reorderProjects(activeWorkspaceId!, newOrder);
+        const ids = workspace.projects.map((p) => p.id);
+        const oldIndex = ids.indexOf(String(active.id));
+        const newIndex = ids.indexOf(String(over.id));
+        ids.splice(oldIndex, 1);
+        ids.splice(newIndex, 0, String(active.id));
+        reorderProjects(activeWorkspaceId!, ids);
       }
     } else if (activeData.type === 'category' && overData.type === 'category') {
       if (activeData.parentId === overData.parentId) {
         const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
         const project = workspace?.projects.find((p) => p.id === activeData.parentId);
         if (project) {
-          const oldIndex = project.categories.findIndex((c) => c.id === active.id);
-          const newIndex = project.categories.findIndex((c) => c.id === over.id);
-          const newOrder = [...project.categories.map((c) => c.id)];
-          newOrder.splice(oldIndex, 1);
-          newOrder.splice(newIndex, 0, String(active.id));
-          reorderCategories(activeData.parentId, newOrder);
+          const ids = project.categories.map((c) => c.id);
+          const oldIndex = ids.indexOf(String(active.id));
+          const newIndex = ids.indexOf(String(over.id));
+          ids.splice(oldIndex, 1);
+          ids.splice(newIndex, 0, String(active.id));
+          reorderCategories(activeData.parentId, ids);
         }
       } else {
         moveCategory(String(active.id), overData.parentId);
       }
     } else if (activeData.type === 'custom' && overData.type === 'custom') {
-      if (activeData.parentId === overData.parentId) {
-        const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
-        for (const project of workspace?.projects || []) {
-          const category = project.categories.find((c) => c.id === activeData.parentId);
-          if (category) {
-            const oldIndex = category.customs.findIndex((c) => c.id === active.id);
-            const newIndex = category.customs.findIndex((c) => c.id === over.id);
-            const newOrder = [...category.customs.map((c) => c.id)];
-            newOrder.splice(oldIndex, 1);
-            newOrder.splice(newIndex, 0, String(active.id));
-            reorderCustoms(activeData.parentId, newOrder);
-            break;
-          }
-        }
+      if (activeData.parentId === overData.parentId && activeData.isCategory === overData.isCategory) {
+        const ids = getCustomIds(activeData.parentId, activeData.isCategory);
+        const oldIndex = ids.indexOf(String(active.id));
+        const newIndex = ids.indexOf(String(over.id));
+        ids.splice(oldIndex, 1);
+        ids.splice(newIndex, 0, String(active.id));
+        reorderCustoms(activeData.parentId, ids, activeData.isCategory);
       } else {
-        moveCustom(String(active.id), overData.parentId);
+        moveCustom(String(active.id), overData.projectId!, overData.isCategory ? overData.parentId : undefined);
       }
     } else if (activeData.type === 'custom' && overData.type === 'category') {
-      moveCustom(String(active.id), String(over.id));
+      moveCustom(String(active.id), overData.parentId, String(over.id));
+    } else if (activeData.type === 'custom' && overData.type === 'project') {
+      moveCustom(String(active.id), String(over.id), undefined);
     }
+  };
+
+  const getCustomIds = (parentId: string, isCategory?: boolean): string[] => {
+    const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
+    if (!workspace) return [];
+    for (const project of workspace.projects) {
+      if (isCategory) {
+        const category = project.categories.find((c) => c.id === parentId);
+        if (category) return category.customs.map((c) => c.id);
+      } else if (project.id === parentId) {
+        return project.customs.map((c) => c.id);
+      }
+    }
+    return [];
   };
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
@@ -168,11 +172,7 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
   if (isCollapsed) {
     return (
       <div className="w-12 border-r border-[var(--border)] bg-[var(--sidebar-bg)] flex flex-col items-center py-4">
-        <button
-          onClick={onToggleCollapse}
-          className="p-2 hover:bg-[var(--hover)] rounded mb-4"
-          title="Expand sidebar"
-        >
+        <button onClick={onToggleCollapse} className="p-2 hover:bg-[var(--hover)] rounded" title="Expand sidebar">
           <PanelLeft className="w-5 h-5" />
         </button>
       </div>
@@ -236,13 +236,13 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex-1 overflow-auto p-2">
+        <div className="flex-1 overflow-auto py-2">
           <SortableContext
             items={activeWorkspace?.projects.map((p) => p.id) || []}
             strategy={verticalListSortingStrategy}
           >
             {activeWorkspace?.projects.map((project) => (
-              <SortableProject
+              <ProjectItem
                 key={project.id}
                 project={project}
                 isExpanded={expandedProjects.has(project.id)}
@@ -253,10 +253,10 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
                 expandedCategories={expandedCategories}
                 onToggle={() => toggleProject(project.id)}
                 onSelect={() => {
-                  toggleProject(project.id);
+                  if (!expandedProjects.has(project.id)) toggleProject(project.id);
                   setActiveProject(project.id);
                 }}
-                onStartEdit={(id) => setEditingId(id)}
+                onStartEdit={setEditingId}
                 onUpdateName={(name) => {
                   updateProject(project.id, { name });
                   setEditingId(null);
@@ -264,9 +264,10 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
                 onCancelEdit={() => setEditingId(null)}
                 onDelete={() => deleteProject(project.id)}
                 onAddCategory={() => createCategory(project.id)}
+                onAddCustom={(categoryId) => createCustom(project.id, categoryId)}
                 onToggleCategory={toggleCategory}
                 onSelectCategory={(id) => {
-                  toggleCategory(id);
+                  if (!expandedCategories.has(id)) toggleCategory(id);
                   setActiveCategory(id);
                 }}
                 onUpdateCategory={(id, name) => {
@@ -274,7 +275,6 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
                   setEditingId(null);
                 }}
                 onDeleteCategory={deleteCategory}
-                onAddCustom={createCustom}
                 onSelectCustom={setActiveCustom}
                 onUpdateCustom={(id, name) => {
                   updateCustom(id, { name });
@@ -298,8 +298,23 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
   );
 }
 
-interface SortableProjectProps {
-  project: { id: string; name: string; categories: Array<{ id: string; name: string; customs: Array<{ id: string; name: string }> }> };
+// Tree line component
+function TreeLine({ isLast }: { isLast: boolean }) {
+  return (
+    <div className="w-4 flex-shrink-0 relative">
+      <div className="absolute left-2 top-0 bottom-0 w-px bg-[var(--border)]" style={{ height: isLast ? '50%' : '100%' }} />
+      <div className="absolute left-2 top-1/2 w-2 h-px bg-[var(--border)]" />
+    </div>
+  );
+}
+
+interface ProjectItemProps {
+  project: {
+    id: string;
+    name: string;
+    categories: Array<{ id: string; name: string; customs: Array<{ id: string; name: string }> }>;
+    customs: Array<{ id: string; name: string }>;
+  };
   isExpanded: boolean;
   isActive: boolean;
   editingId: string | null;
@@ -313,17 +328,17 @@ interface SortableProjectProps {
   onCancelEdit: () => void;
   onDelete: () => void;
   onAddCategory: () => void;
+  onAddCustom: (categoryId?: string) => void;
   onToggleCategory: (id: string) => void;
   onSelectCategory: (id: string) => void;
   onUpdateCategory: (id: string, name: string) => void;
   onDeleteCategory: (id: string) => void;
-  onAddCustom: (categoryId: string) => void;
   onSelectCustom: (id: string) => void;
   onUpdateCustom: (id: string, name: string) => void;
   onDeleteCustom: (id: string) => void;
 }
 
-function SortableProject({
+function ProjectItem({
   project,
   isExpanded,
   isActive,
@@ -338,15 +353,15 @@ function SortableProject({
   onCancelEdit,
   onDelete,
   onAddCategory,
+  onAddCustom,
   onToggleCategory,
   onSelectCategory,
   onUpdateCategory,
   onDeleteCategory,
-  onAddCustom,
   onSelectCustom,
   onUpdateCustom,
   onDeleteCustom,
-}: SortableProjectProps) {
+}: ProjectItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: project.id,
     data: { type: 'project', parentId: null, name: project.name },
@@ -358,38 +373,41 @@ function SortableProject({
     opacity: isDragging ? 0.5 : 1,
   };
 
+  const totalItems = project.categories.length + project.customs.length;
+
   return (
-    <div ref={setNodeRef} style={style} className="mb-1">
+    <div ref={setNodeRef} style={style}>
       <div
-        className={`group flex items-center rounded hover:bg-[var(--hover)] ${
+        className={`group flex items-center h-8 px-2 hover:bg-[var(--hover)] ${
           isActive ? 'bg-[var(--hover)]' : ''
         }`}
       >
-        <button {...attributes} {...listeners} className="p-1 cursor-grab opacity-0 group-hover:opacity-100">
+        <button {...attributes} {...listeners} className="p-0.5 cursor-grab opacity-0 group-hover:opacity-100">
           <GripVertical className="w-3 h-3 text-gray-400" />
         </button>
-        <button onClick={onSelect} className="p-1">
-          {isExpanded ? (
-            <ChevronDown className="w-4 h-4" />
-          ) : (
-            <ChevronRight className="w-4 h-4" />
-          )}
+        <button onClick={onToggle} className="p-0.5">
+          {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </button>
-        <FolderKanban className="w-4 h-4 text-amber-500 mr-2" />
-        <div className="flex-1" onDoubleClick={() => onStartEdit(project.id)}>
-          <EditableText
-            value={project.name}
-            isEditing={editingId === project.id}
-            onSave={onUpdateName}
-            onCancel={onCancelEdit}
-            className="text-sm"
-          />
+        <Folder className="w-4 h-4 text-gray-500 mx-1" />
+        <div className="flex-1 min-w-0" onDoubleClick={() => onStartEdit(project.id)}>
+          <button onClick={onSelect} className="w-full text-left">
+            <EditableText
+              value={project.name}
+              isEditing={editingId === project.id}
+              onSave={onUpdateName}
+              onCancel={onCancelEdit}
+              className="text-sm truncate"
+            />
+          </button>
         </div>
-        <div className="flex items-center gap-0.5 pr-1 opacity-0 group-hover:opacity-100">
-          <button onClick={onAddCategory} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded" title="Add Category">
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
+          <button onClick={() => onAddCustom()} className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded" title="Add Custom">
             <Plus className="w-3 h-3" />
           </button>
-          <button onClick={onDelete} className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-500">
+          <button onClick={onAddCategory} className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded" title="Add Category">
+            <Box className="w-3 h-3" />
+          </button>
+          <button onClick={onDelete} className="p-0.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-500">
             <Trash2 className="w-3 h-3" />
           </button>
         </div>
@@ -397,12 +415,29 @@ function SortableProject({
 
       {isExpanded && (
         <div className="ml-4">
-          <SortableContext
-            items={project.categories.map((c) => c.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {project.categories.map((category) => (
-              <SortableCategory
+          {/* Project-level customs */}
+          <SortableContext items={project.customs.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+            {project.customs.map((custom, idx) => (
+              <CustomItem
+                key={custom.id}
+                custom={custom}
+                projectId={project.id}
+                isActive={activeCustomId === custom.id}
+                editingId={editingId}
+                isLast={idx === project.customs.length - 1 && project.categories.length === 0}
+                onSelect={() => onSelectCustom(custom.id)}
+                onStartEdit={onStartEdit}
+                onUpdateName={(name) => onUpdateCustom(custom.id, name)}
+                onCancelEdit={onCancelEdit}
+                onDelete={() => onDeleteCustom(custom.id)}
+              />
+            ))}
+          </SortableContext>
+
+          {/* Categories */}
+          <SortableContext items={project.categories.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+            {project.categories.map((category, catIdx) => (
+              <CategoryItem
                 key={category.id}
                 category={category}
                 projectId={project.id}
@@ -410,6 +445,7 @@ function SortableProject({
                 isActive={activeCategoryId === category.id}
                 editingId={editingId}
                 activeCustomId={activeCustomId}
+                isLast={catIdx === project.categories.length - 1}
                 onToggle={() => onToggleCategory(category.id)}
                 onSelect={() => onSelectCategory(category.id)}
                 onStartEdit={onStartEdit}
@@ -429,13 +465,14 @@ function SortableProject({
   );
 }
 
-interface SortableCategoryProps {
+interface CategoryItemProps {
   category: { id: string; name: string; customs: Array<{ id: string; name: string }> };
   projectId: string;
   isExpanded: boolean;
   isActive: boolean;
   editingId: string | null;
   activeCustomId: string | null;
+  isLast: boolean;
   onToggle: () => void;
   onSelect: () => void;
   onStartEdit: (id: string) => void;
@@ -448,13 +485,14 @@ interface SortableCategoryProps {
   onDeleteCustom: (id: string) => void;
 }
 
-function SortableCategory({
+function CategoryItem({
   category,
   projectId,
   isExpanded,
   isActive,
   editingId,
   activeCustomId,
+  isLast,
   onToggle,
   onSelect,
   onStartEdit,
@@ -465,7 +503,7 @@ function SortableCategory({
   onSelectCustom,
   onUpdateCustom,
   onDeleteCustom,
-}: SortableCategoryProps) {
+}: CategoryItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: category.id,
     data: { type: 'category', parentId: projectId, name: category.name },
@@ -478,75 +516,82 @@ function SortableCategory({
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="mb-0.5">
-      <div
-        className={`group flex items-center rounded hover:bg-[var(--hover)] ${
-          isActive ? 'bg-[var(--hover)]' : ''
-        }`}
-      >
-        <button {...attributes} {...listeners} className="p-1 cursor-grab opacity-0 group-hover:opacity-100">
-          <GripVertical className="w-3 h-3 text-gray-400" />
-        </button>
-        <button onClick={onSelect} className="p-1">
-          {isExpanded ? (
-            <ChevronDown className="w-3.5 h-3.5" />
-          ) : (
-            <ChevronRight className="w-3.5 h-3.5" />
-          )}
-        </button>
-        <Layers className="w-3.5 h-3.5 text-blue-500 mr-2" />
-        <div className="flex-1" onDoubleClick={() => onStartEdit(category.id)}>
-          <EditableText
-            value={category.name}
-            isEditing={editingId === category.id}
-            onSave={onUpdateName}
-            onCancel={onCancelEdit}
-            className="text-sm"
-          />
-        </div>
-        <span className="text-xs text-gray-500 mr-1">{category.customs.length}</span>
-        <div className="flex items-center gap-0.5 pr-1 opacity-0 group-hover:opacity-100">
-          <button onClick={onAddCustom} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded" title="Add Custom">
-            <Plus className="w-3 h-3" />
+    <div ref={setNodeRef} style={style}>
+      <div className="flex">
+        <TreeLine isLast={isLast && !isExpanded} />
+        <div
+          className={`group flex-1 flex items-center h-8 pr-2 hover:bg-[var(--hover)] rounded-r ${
+            isActive ? 'bg-[var(--hover)]' : ''
+          }`}
+        >
+          <button {...attributes} {...listeners} className="p-0.5 cursor-grab opacity-0 group-hover:opacity-100">
+            <GripVertical className="w-3 h-3 text-gray-400" />
           </button>
-          <button onClick={onDelete} className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-500">
-            <Trash2 className="w-3 h-3" />
+          <button onClick={onToggle} className="p-0.5">
+            {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           </button>
+          <Box className="w-3.5 h-3.5 text-gray-500 mx-1" />
+          <div className="flex-1 min-w-0" onDoubleClick={() => onStartEdit(category.id)}>
+            <button onClick={onSelect} className="w-full text-left">
+              <EditableText
+                value={category.name}
+                isEditing={editingId === category.id}
+                onSave={onUpdateName}
+                onCancel={onCancelEdit}
+                className="text-sm truncate"
+              />
+            </button>
+          </div>
+          <span className="text-xs text-gray-400 mx-1">{category.customs.length}</span>
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
+            <button onClick={onAddCustom} className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded" title="Add Custom">
+              <Plus className="w-3 h-3" />
+            </button>
+            <button onClick={onDelete} className="p-0.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-500">
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
         </div>
       </div>
 
       {isExpanded && (
-        <div className="ml-4">
-          <SortableContext
-            items={category.customs.map((c) => c.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {category.customs.map((custom) => (
-              <SortableCustom
-                key={custom.id}
-                custom={custom}
-                categoryId={category.id}
-                isActive={activeCustomId === custom.id}
-                editingId={editingId}
-                onSelect={() => onSelectCustom(custom.id)}
-                onStartEdit={onStartEdit}
-                onUpdateName={(name) => onUpdateCustom(custom.id, name)}
-                onCancelEdit={onCancelEdit}
-                onDelete={() => onDeleteCustom(custom.id)}
-              />
-            ))}
-          </SortableContext>
+        <div className="flex">
+          <div className="w-4 flex-shrink-0 relative">
+            {!isLast && <div className="absolute left-2 top-0 bottom-0 w-px bg-[var(--border)]" />}
+          </div>
+          <div className="flex-1 ml-4">
+            <SortableContext items={category.customs.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+              {category.customs.map((custom, idx) => (
+                <CustomItem
+                  key={custom.id}
+                  custom={custom}
+                  projectId={projectId}
+                  categoryId={category.id}
+                  isActive={activeCustomId === custom.id}
+                  editingId={editingId}
+                  isLast={idx === category.customs.length - 1}
+                  onSelect={() => onSelectCustom(custom.id)}
+                  onStartEdit={onStartEdit}
+                  onUpdateName={(name) => onUpdateCustom(custom.id, name)}
+                  onCancelEdit={onCancelEdit}
+                  onDelete={() => onDeleteCustom(custom.id)}
+                />
+              ))}
+            </SortableContext>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-interface SortableCustomProps {
+interface CustomItemProps {
   custom: { id: string; name: string };
-  categoryId: string;
+  projectId: string;
+  categoryId?: string;
   isActive: boolean;
   editingId: string | null;
+  isLast: boolean;
   onSelect: () => void;
   onStartEdit: (id: string) => void;
   onUpdateName: (name: string) => void;
@@ -554,20 +599,22 @@ interface SortableCustomProps {
   onDelete: () => void;
 }
 
-function SortableCustom({
+function CustomItem({
   custom,
+  projectId,
   categoryId,
   isActive,
   editingId,
+  isLast,
   onSelect,
   onStartEdit,
   onUpdateName,
   onCancelEdit,
   onDelete,
-}: SortableCustomProps) {
+}: CustomItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: custom.id,
-    data: { type: 'custom', parentId: categoryId, name: custom.name },
+    data: { type: 'custom', parentId: categoryId || projectId, projectId, isCategory: !!categoryId, name: custom.name },
   });
 
   const style = {
@@ -578,31 +625,35 @@ function SortableCustom({
 
   return (
     <div ref={setNodeRef} style={style}>
-      <div
-        className={`group flex items-center rounded hover:bg-[var(--hover)] ${
-          isActive ? 'bg-[var(--hover)] font-medium' : ''
-        }`}
-      >
-        <button {...attributes} {...listeners} className="p-1 cursor-grab opacity-0 group-hover:opacity-100">
-          <GripVertical className="w-3 h-3 text-gray-400" />
-        </button>
-        <button onClick={onSelect} className="flex-1 flex items-center gap-2 py-1.5 text-sm text-left">
-          <FileCode2 className="w-3.5 h-3.5 text-green-500" />
-          <div className="flex-1" onDoubleClick={(e) => { e.stopPropagation(); onStartEdit(custom.id); }}>
-            <EditableText
-              value={custom.name}
-              isEditing={editingId === custom.id}
-              onSave={onUpdateName}
-              onCancel={onCancelEdit}
-            />
-          </div>
-        </button>
-        <button
-          onClick={onDelete}
-          className="p-1 pr-1 opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-500"
+      <div className="flex">
+        <TreeLine isLast={isLast} />
+        <div
+          className={`group flex-1 flex items-center h-7 pr-2 hover:bg-[var(--hover)] rounded-r ${
+            isActive ? 'bg-[var(--hover)] font-medium' : ''
+          }`}
         >
-          <Trash2 className="w-3 h-3" />
-        </button>
+          <button {...attributes} {...listeners} className="p-0.5 cursor-grab opacity-0 group-hover:opacity-100">
+            <GripVertical className="w-3 h-3 text-gray-400" />
+          </button>
+          <FileCode className="w-3.5 h-3.5 text-gray-500 mx-1" />
+          <div className="flex-1 min-w-0" onDoubleClick={(e) => { e.stopPropagation(); onStartEdit(custom.id); }}>
+            <button onClick={onSelect} className="w-full text-left">
+              <EditableText
+                value={custom.name}
+                isEditing={editingId === custom.id}
+                onSave={onUpdateName}
+                onCancel={onCancelEdit}
+                className="text-sm truncate"
+              />
+            </button>
+          </div>
+          <button
+            onClick={onDelete}
+            className="p-0.5 opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-500"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
       </div>
     </div>
   );

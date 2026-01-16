@@ -35,7 +35,7 @@ export async function fetchFieldData(
   }
 
   const headers = buildRequestHeaders(
-    { id: '', name: '', categoryId: category.id, fields: [], createdAt: 0, updatedAt: 0 },
+    { id: '', name: '', projectId: category.projectId, categoryId: category.id, fields: [], createdAt: 0, updatedAt: 0 },
     category
   );
 
@@ -93,7 +93,7 @@ export async function testEndpoint(
     const url = buildUrl(baseUrl, endpoint);
 
     const headers = buildRequestHeaders(
-      { id: '', name: '', categoryId: category.id, fields: [], createdAt: 0, updatedAt: 0 },
+      { id: '', name: '', projectId: category.projectId, categoryId: category.id, fields: [], createdAt: 0, updatedAt: 0 },
       category
     );
 

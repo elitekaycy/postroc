@@ -66,7 +66,8 @@ export interface Field {
 export interface Custom {
   id: string;
   name: string;
-  categoryId: string;
+  projectId: string;
+  categoryId?: string;
   fields: Field[];
   requestConfig?: RequestConfig;
   customHeaders?: Header[];
@@ -90,6 +91,7 @@ export interface Project {
   name: string;
   workspaceId: string;
   categories: Category[];
+  customs: Custom[];
   createdAt: number;
 }
 
