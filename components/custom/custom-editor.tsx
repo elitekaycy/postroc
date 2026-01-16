@@ -1,13 +1,13 @@
 'use client';
 
 import { useWorkspaceStore } from '@/lib/store/workspace-store';
-import type { Custom, HttpMethod, HttpResponse, FieldType } from '@/lib/types/core';
+import type { HttpMethod, HttpResponse, FieldType } from '@/lib/types/core';
 import { sendRequest } from '@/lib/http/http-client';
-import { generatePreviewData } from '@/lib/engine/data-resolver';
 import { ResponseViewer } from '@/components/http/response-viewer';
 import { ReferenceSelector } from '@/components/custom/reference-selector';
-import { Trash2, Plus, Play, RefreshCw } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { DataPreviewPanel } from '@/components/custom/data-preview-panel';
+import { Trash2, Plus, Play } from 'lucide-react';
+import { useState } from 'react';
 
 interface CustomEditorProps {
   customId: string;
@@ -31,17 +31,6 @@ export function CustomEditor({ customId }: CustomEditorProps) {
 
   const [response, setResponse] = useState<HttpResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [previewData, setPreviewData] = useState<Record<string, unknown>>({});
-
-  const regeneratePreview = useCallback(() => {
-    if (custom) {
-      setPreviewData(generatePreviewData(custom));
-    }
-  }, [custom]);
-
-  useEffect(() => {
-    regeneratePreview();
-  }, [regeneratePreview]);
 
   if (!custom || custom.id !== customId || !category) {
     return null;
@@ -223,22 +212,7 @@ export function CustomEditor({ customId }: CustomEditorProps) {
         )}
       </section>
 
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Data Preview</h3>
-          <button
-            onClick={regeneratePreview}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 rounded"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Regenerate
-          </button>
-        </div>
-
-        <pre className="p-4 bg-gray-50 dark:bg-gray-900 border border-[var(--border)] rounded-md text-sm overflow-auto max-h-48">
-          {JSON.stringify(previewData, null, 2)}
-        </pre>
-      </section>
+      <DataPreviewPanel custom={custom} category={category} />
 
       <section>
         <h3 className="text-lg font-semibold mb-4">Response</h3>
