@@ -876,6 +876,20 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
 
     populateFieldsFromResponse: (customId: string, data: Record<string, unknown>) =>
       set((state) => {
+        // Helper to recursively add IDs to field and its children
+        const addIdsToField = (fieldDef: Omit<Field, 'id'>): Field => {
+          const field: Field = {
+            ...fieldDef,
+            id: crypto.randomUUID(),
+          };
+          if (fieldDef.children && fieldDef.children.length > 0) {
+            field.children = fieldDef.children.map((child) =>
+              addIdsToField(child as Omit<Field, 'id'>)
+            );
+          }
+          return field;
+        };
+
         // Extract fields from response (handles nested data patterns)
         const extractedData = extractFieldsFromResponse(data);
         const newFieldDefs = populateFieldsFromObject(extractedData);
@@ -889,10 +903,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
               // Only add fields that don't already exist
               for (const fieldDef of newFieldDefs) {
                 if (!existingKeys.has(fieldDef.key)) {
-                  projectCustom.fields.push({
-                    ...fieldDef,
-                    id: crypto.randomUUID(),
-                  });
+                  projectCustom.fields.push(addIdsToField(fieldDef));
                 }
               }
               projectCustom.updatedAt = Date.now();
@@ -906,10 +917,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
                 // Only add fields that don't already exist
                 for (const fieldDef of newFieldDefs) {
                   if (!existingKeys.has(fieldDef.key)) {
-                    custom.fields.push({
-                      ...fieldDef,
-                      id: crypto.randomUUID(),
-                    });
+                    custom.fields.push(addIdsToField(fieldDef));
                   }
                 }
                 custom.updatedAt = Date.now();

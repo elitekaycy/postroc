@@ -8,8 +8,10 @@ import { buildRequestHeaders, buildFullUrl } from '@/lib/http/request-builder';
 import { ResponseViewer } from '@/components/http/response-viewer';
 import { FieldEditor } from '@/components/custom/field-editor';
 import { DataPreviewPanel } from '@/components/custom/data-preview-panel';
+import { ExportConfigPanel } from '@/components/custom/export-config-panel';
 import { Plus, Play, Download } from 'lucide-react';
-import { useState } from 'react';
+import type { ExportConfig } from '@/lib/types/core';
+import { useState, useEffect } from 'react';
 
 interface CustomEditorProps {
   customId: string;
@@ -32,6 +34,11 @@ export function CustomEditor({ customId }: CustomEditorProps) {
   const [response, setResponse] = useState<HttpResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
+
+  // Reset response when switching customs
+  useEffect(() => {
+    setResponse(null);
+  }, [customId]);
 
   if (!custom || custom.id !== customId) {
     return null;
@@ -160,35 +167,44 @@ export function CustomEditor({ customId }: CustomEditorProps) {
       {/* Main Content */}
       <div className="flex-1 flex gap-6 min-h-0 overflow-hidden">
         {/* Left - Fields */}
-        <div className="w-1/2 flex flex-col min-h-0">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] uppercase tracking-wider text-gray-400">Fields</span>
-            <button
-              onClick={handleAddField}
-              className="p-1 hover:bg-[var(--hover)] rounded transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5 text-gray-400" />
-            </button>
+        <div className="w-1/2 flex flex-col min-h-0 gap-3">
+          <div className="flex-1 min-h-0 flex flex-col">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] uppercase tracking-wider text-gray-400">Fields</span>
+              <button
+                onClick={handleAddField}
+                className="p-1 hover:bg-[var(--hover)] rounded transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5 text-gray-400" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto">
+              {custom.fields.length === 0 ? (
+                <div className="text-xs text-gray-400 py-8 text-center">
+                  No fields
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {custom.fields.map((field) => (
+                    <FieldEditor
+                      key={field.id}
+                      customId={customId}
+                      field={field}
+                      fieldPath={[field.id]}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="flex-1 overflow-auto">
-            {custom.fields.length === 0 ? (
-              <div className="text-xs text-gray-400 py-8 text-center">
-                No fields
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {custom.fields.map((field) => (
-                  <FieldEditor
-                    key={field.id}
-                    customId={customId}
-                    field={field}
-                    fieldPath={[field.id]}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          {/* Export Config */}
+          <ExportConfigPanel
+            config={custom.exportConfig}
+            fieldKeys={custom.fields.filter((f) => f.isExported).map((f) => f.key)}
+            onChange={(config: ExportConfig | undefined) => updateCustom(customId, { exportConfig: config })}
+          />
         </div>
 
         {/* Right - Preview & Response */}

@@ -65,6 +65,19 @@ export interface Field {
   children?: Field[]; // Nested fields for object/array types
 }
 
+// Export configuration for how a custom should export its data when referenced
+export type ExportAsType = 'full' | 'field' | 'array' | 'transform';
+
+export interface ExportConfig {
+  type: ExportAsType;
+  // For 'field' type - which field to export
+  fieldPath?: string;
+  // For 'array' type - extract this field from each array item
+  arrayField?: string;
+  // For 'transform' type - JavaScript code to transform the data
+  transformCode?: string;
+}
+
 export interface Custom {
   id: string;
   name: string;
@@ -73,6 +86,7 @@ export interface Custom {
   fields: Field[];
   requestConfig?: RequestConfig;
   customHeaders?: Header[];
+  exportConfig?: ExportConfig; // How to export when this custom is referenced
   createdAt: number;
   updatedAt: number;
 }

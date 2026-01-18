@@ -28,10 +28,23 @@ export function ReferenceSelector({ currentCustomId, value, onChange }: Referenc
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const allCustoms: Array<{ id: string; name: string; categoryName: string; categoryId: string }> = [];
+  const allCustoms: Array<{ id: string; name: string; categoryName: string; categoryId: string; projectId: string }> = [];
 
   for (const workspace of workspaces) {
     for (const project of workspace.projects) {
+      // Add project-level customs (no category)
+      for (const custom of project.customs) {
+        if (custom.id !== currentCustomId) {
+          allCustoms.push({
+            id: custom.id,
+            name: custom.name,
+            categoryName: project.name,
+            categoryId: '',
+            projectId: project.id,
+          });
+        }
+      }
+      // Add category-level customs
       for (const category of project.categories) {
         for (const custom of category.customs) {
           if (custom.id !== currentCustomId) {
@@ -40,6 +53,7 @@ export function ReferenceSelector({ currentCustomId, value, onChange }: Referenc
               name: custom.name,
               categoryName: category.name,
               categoryId: category.id,
+              projectId: project.id,
             });
           }
         }
@@ -60,21 +74,30 @@ export function ReferenceSelector({ currentCustomId, value, onChange }: Referenc
   const filteredCategoryCustoms = filterCustoms(categoryCustoms);
   const filteredOtherCustoms = filterCustoms(otherCustoms);
 
-  const getCurrentCategory = () => {
+  const getAllCustomsForCycleCheck = () => {
+    const customs: Array<{ id: string; fields: Array<{ type: string; referenceId?: string }> }> = [];
     for (const workspace of workspaces) {
       for (const project of workspace.projects) {
-        const category = project.categories.find((c) => c.id === activeCategoryId);
-        if (category) return category;
+        // Project-level customs
+        for (const custom of project.customs) {
+          customs.push({ id: custom.id, fields: custom.fields });
+        }
+        // Category-level customs
+        for (const category of project.categories) {
+          for (const custom of category.customs) {
+            customs.push({ id: custom.id, fields: custom.fields });
+          }
+        }
       }
     }
-    return null;
+    return customs;
   };
 
   const checkCycle = (targetId: string): boolean => {
-    const category = getCurrentCategory();
-    if (!category) return false;
+    const allCustomsForCheck = getAllCustomsForCycleCheck();
+    if (allCustomsForCheck.length === 0) return false;
 
-    const graph = buildDependencyGraph(category.customs);
+    const graph = buildDependencyGraph(allCustomsForCheck as any);
     return wouldCreateCycle(currentCustomId, targetId, graph);
   };
 
@@ -145,20 +168,31 @@ export function ReferenceSelector({ currentCustomId, value, onChange }: Referenc
             {filteredOtherCustoms.length > 0 && (
               <div>
                 <div className="px-3 py-1.5 text-xs font-medium text-gray-500 bg-[var(--sidebar-bg)]">
-                  Other Categories
+                  Other Customs
                 </div>
-                {filteredOtherCustoms.map((custom) => (
-                  <button
-                    key={custom.id}
-                    onClick={() => handleSelect(custom.id)}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-[var(--hover)] ${
-                      value === custom.id ? 'bg-[var(--hover)]' : ''
-                    }`}
-                  >
-                    <span className="flex-1">{custom.name}</span>
-                    <span className="text-xs text-gray-500">{custom.categoryName}</span>
-                  </button>
-                ))}
+                {filteredOtherCustoms.map((custom) => {
+                  const wouldCycle = checkCycle(custom.id);
+                  return (
+                    <button
+                      key={custom.id}
+                      onClick={() => !wouldCycle && handleSelect(custom.id)}
+                      disabled={wouldCycle}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-[var(--hover)] ${
+                        wouldCycle ? 'opacity-50 cursor-not-allowed' : ''
+                      } ${value === custom.id ? 'bg-[var(--hover)]' : ''}`}
+                    >
+                      <span className="flex-1">{custom.name}</span>
+                      {wouldCycle ? (
+                        <span className="flex items-center gap-1 text-xs text-yellow-600">
+                          <AlertTriangle className="w-3 h-3" />
+                          Cycle
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-500">{custom.categoryName}</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
 

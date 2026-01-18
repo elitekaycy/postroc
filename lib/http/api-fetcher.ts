@@ -19,25 +19,29 @@ export function clearCacheEntry(key: string): void {
 
 export async function fetchFieldData(
   field: Field,
-  category: Category
+  category?: Category
 ): Promise<unknown> {
   if (field.type !== 'api-fetch' || !field.apiEndpoint) {
     throw new Error('Field is not configured for API fetch');
   }
 
-  const baseUrl = getBaseUrl(category);
+  const baseUrl = category ? getBaseUrl(category) : '';
   const url = buildUrl(baseUrl, field.apiEndpoint);
-  const cacheKey = `${category.id}-${category.config.activeEnvironment}-${field.apiEndpoint}`;
+  const cacheKey = category
+    ? `${category.id}-${category.config.activeEnvironment}-${field.apiEndpoint}`
+    : `no-category-${field.apiEndpoint}`;
 
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     return cached.data;
   }
 
-  const headers = buildRequestHeaders(
-    { id: '', name: '', projectId: category.projectId, categoryId: category.id, fields: [], createdAt: 0, updatedAt: 0 },
-    category
-  );
+  const headers = category
+    ? buildRequestHeaders(
+        { id: '', name: '', projectId: category.projectId, categoryId: category.id, fields: [], createdAt: 0, updatedAt: 0 },
+        category
+      )
+    : {};
 
   let lastError: Error | null = null;
   const maxRetries = 2;

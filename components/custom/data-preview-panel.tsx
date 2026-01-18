@@ -1,11 +1,12 @@
 'use client';
 
 import type { Custom, Category } from '@/lib/types/core';
+import { useWorkspaceStore } from '@/lib/store/workspace-store';
 import { generatePreviewData, resolveSingleCustom, ResolvedData } from '@/lib/engine/data-resolver';
 import { exportData, copyToClipboard, ExportFormat } from '@/lib/export/exporters';
 import { SyntaxHighlighter } from '@/components/ui/syntax-highlighter';
 import { Copy, Check } from 'lucide-react';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 
 interface DataPreviewPanelProps {
   custom: Custom;
@@ -13,11 +14,28 @@ interface DataPreviewPanelProps {
 }
 
 export function DataPreviewPanel({ custom, category }: DataPreviewPanelProps) {
+  const { workspaces } = useWorkspaceStore();
   const [exportFormat, setExportFormat] = useState<ExportFormat>('json');
   const [previewData, setPreviewData] = useState<Record<string, unknown>>({});
   const [resolvedData, setResolvedData] = useState<ResolvedData | null>(null);
   const [isResolving, setIsResolving] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Collect all customs from all workspaces/projects/categories
+  const allCustoms = useMemo(() => {
+    const customs: Custom[] = [];
+    for (const workspace of workspaces) {
+      for (const project of workspace.projects) {
+        // Project-level customs
+        customs.push(...project.customs);
+        // Category-level customs
+        for (const cat of project.categories) {
+          customs.push(...cat.customs);
+        }
+      }
+    }
+    return customs;
+  }, [workspaces]);
 
   const regeneratePreview = useCallback(() => {
     setPreviewData(generatePreviewData(custom));
@@ -31,7 +49,7 @@ export function DataPreviewPanel({ custom, category }: DataPreviewPanelProps) {
   const handleResolve = async () => {
     setIsResolving(true);
     try {
-      const result = await resolveSingleCustom(custom, category);
+      const result = await resolveSingleCustom(custom, category, allCustoms);
       setResolvedData(result);
     } catch {
       // Silent fail

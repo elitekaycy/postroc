@@ -351,9 +351,12 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
 // Tree line component
 function TreeLine({ isLast }: { isLast: boolean }) {
   return (
-    <div className="w-4 flex-shrink-0 relative">
-      <div className="absolute left-2 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700" style={{ height: isLast ? '50%' : '100%' }} />
-      <div className="absolute left-2 top-1/2 w-2 h-px bg-gray-200 dark:bg-gray-700" />
+    <div className="w-3 flex-shrink-0 relative">
+      <div
+        className="absolute left-1.5 top-0 w-px bg-[var(--border)]"
+        style={{ height: isLast ? '50%' : '100%' }}
+      />
+      <div className="absolute left-1.5 top-1/2 w-1.5 h-px bg-[var(--border)]" />
     </div>
   );
 }
@@ -428,17 +431,21 @@ function ProjectItem({
   return (
     <div ref={setNodeRef} style={style}>
       <div
-        className={`group flex items-center h-8 px-2 mx-1 rounded-md transition-all duration-150 ${
-          isActive ? 'bg-[var(--active-bg)] text-[var(--active-text)]' : 'hover:bg-[var(--hover)]'
+        className={`group flex items-center h-7 px-1 rounded transition-colors duration-100 ${
+          isActive ? 'bg-[var(--active-bg)]' : 'hover:bg-[var(--hover)]'
         }`}
       >
-        <button {...attributes} {...listeners} className="p-0.5 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity">
+        <button {...attributes} {...listeners} className="p-0.5 cursor-grab opacity-0 group-hover:opacity-40 hover:!opacity-100 transition-opacity">
           <GripVertical className="w-3 h-3 text-[var(--muted)]" />
         </button>
-        <button onClick={onToggle} className="p-0.5 text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
-          {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+        <button onClick={onToggle} className="p-0.5">
+          {isExpanded ? (
+            <ChevronDown className="w-3.5 h-3.5 text-[var(--muted)]" />
+          ) : (
+            <ChevronRight className="w-3.5 h-3.5 text-[var(--muted)]" />
+          )}
         </button>
-        <Folder className={`w-4 h-4 mx-1 transition-colors ${isActive ? 'text-[var(--active-text)]' : 'text-[var(--muted)]'}`} />
+        <Folder className={`w-3.5 h-3.5 mr-1.5 ${isActive ? 'text-[var(--active-text)]' : 'text-[var(--muted)]'}`} />
         <div className="flex-1 min-w-0" onDoubleClick={() => onStartEdit(project.id)}>
           <button onClick={onSelect} className="w-full text-left">
             <EditableText
@@ -446,19 +453,19 @@ function ProjectItem({
               isEditing={editingId === project.id}
               onSave={onUpdateName}
               onCancel={onCancelEdit}
-              className="text-sm truncate"
+              className={`text-xs truncate ${isActive ? 'text-[var(--active-text)] font-medium' : ''}`}
             />
           </button>
         </div>
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => onAddCustom()} className="p-0.5 hover:bg-[var(--hover)] rounded transition-colors" title="Add Custom">
-            <Plus className="w-3 h-3" />
+        <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={() => onAddCustom()} className="p-1 hover:bg-[var(--active-bg)] rounded" title="Add Custom">
+            <Plus className="w-3 h-3 text-[var(--muted)]" />
           </button>
-          <button onClick={onAddCategory} className="p-0.5 hover:bg-[var(--hover)] rounded transition-colors" title="Add Category">
-            <Box className="w-3 h-3" />
+          <button onClick={onAddCategory} className="p-1 hover:bg-[var(--active-bg)] rounded" title="Add Category">
+            <Box className="w-3 h-3 text-[var(--muted)]" />
           </button>
-          <button onClick={onDelete} className="p-0.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-500 transition-colors" title="Delete Project">
-            <Trash2 className="w-3 h-3" />
+          <button onClick={onDelete} className="p-1 hover:bg-red-500/10 rounded" title="Delete">
+            <Trash2 className="w-3 h-3 text-red-400" />
           </button>
         </div>
       </div>
@@ -567,20 +574,24 @@ function CategoryItem({
 
   return (
     <div ref={setNodeRef} style={style}>
-      <div className="flex">
+      <div className="flex items-center">
         <TreeLine isLast={isLast && !isExpanded} />
         <div
-          className={`group flex-1 flex items-center h-7 pr-2 mr-1 rounded-md transition-all duration-150 ${
-            isActive ? 'bg-[var(--active-bg)] text-[var(--active-text)]' : 'hover:bg-[var(--hover)]'
+          className={`group flex-1 flex items-center h-6 pr-1 rounded transition-colors duration-100 ${
+            isActive ? 'bg-[var(--active-bg)]' : 'hover:bg-[var(--hover)]'
           }`}
         >
-          <button {...attributes} {...listeners} className="p-0.5 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity">
-            <GripVertical className="w-3 h-3 text-[var(--muted)]" />
+          <button {...attributes} {...listeners} className="p-0.5 cursor-grab opacity-0 group-hover:opacity-40 hover:!opacity-100 transition-opacity">
+            <GripVertical className="w-2.5 h-2.5 text-[var(--muted)]" />
           </button>
-          <button onClick={onToggle} className="p-0.5 text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
-            {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+          <button onClick={onToggle} className="p-0.5">
+            {isExpanded ? (
+              <ChevronDown className="w-3 h-3 text-[var(--muted)]" />
+            ) : (
+              <ChevronRight className="w-3 h-3 text-[var(--muted)]" />
+            )}
           </button>
-          <Box className={`w-3.5 h-3.5 mx-1 transition-colors ${isActive ? 'text-[var(--active-text)]' : 'text-[var(--muted)]'}`} />
+          <Box className={`w-3 h-3 mr-1.5 ${isActive ? 'text-[var(--active-text)]' : 'text-[var(--muted)]'}`} />
           <div className="flex-1 min-w-0" onDoubleClick={() => onStartEdit(category.id)}>
             <button onClick={onSelect} className="w-full text-left">
               <EditableText
@@ -588,16 +599,16 @@ function CategoryItem({
                 isEditing={editingId === category.id}
                 onSave={onUpdateName}
                 onCancel={onCancelEdit}
-                className="text-sm truncate"
+                className={`text-xs truncate ${isActive ? 'text-[var(--active-text)] font-medium' : 'text-[var(--muted)]'}`}
               />
             </button>
           </div>
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={onAddCustom} className="p-0.5 hover:bg-[var(--hover)] rounded" title="Add Custom">
-              <Plus className="w-3 h-3" />
+          <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={onAddCustom} className="p-0.5 hover:bg-[var(--active-bg)] rounded" title="Add Custom">
+              <Plus className="w-2.5 h-2.5 text-[var(--muted)]" />
             </button>
-            <button onClick={onDelete} className="p-0.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-500" title="Delete Category">
-              <Trash2 className="w-3 h-3" />
+            <button onClick={onDelete} className="p-0.5 hover:bg-red-500/10 rounded" title="Delete">
+              <Trash2 className="w-2.5 h-2.5 text-red-400" />
             </button>
           </div>
         </div>
@@ -605,10 +616,10 @@ function CategoryItem({
 
       {isExpanded && (
         <div className="flex">
-          <div className="w-4 flex-shrink-0 relative">
-            {!isLast && <div className="absolute left-2 top-0 bottom-0 w-px bg-[var(--border)]" />}
+          <div className="w-3 flex-shrink-0 relative">
+            {!isLast && <div className="absolute left-1.5 top-0 bottom-0 w-px bg-[var(--border)]" />}
           </div>
-          <div className="flex-1 ml-4">
+          <div className="flex-1 ml-3">
             <SortableContext items={category.customs.map((c) => c.id)} strategy={verticalListSortingStrategy}>
               {category.customs.map((custom, idx) => (
                 <CustomItem
@@ -674,17 +685,17 @@ function CustomItem({
 
   return (
     <div ref={setNodeRef} style={style}>
-      <div className="flex">
+      <div className="flex items-center">
         <TreeLine isLast={isLast} />
         <div
-          className={`group flex-1 flex items-center h-7 pr-2 mr-1 rounded-md transition-all duration-150 ${
-            isActive ? 'bg-[var(--active-bg)] text-[var(--active-text)] font-medium' : 'hover:bg-[var(--hover)]'
+          className={`group flex-1 flex items-center h-6 pr-1 rounded transition-colors duration-100 ${
+            isActive ? 'bg-[var(--active-bg)]' : 'hover:bg-[var(--hover)]'
           }`}
         >
-          <button {...attributes} {...listeners} className="p-0.5 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity">
-            <GripVertical className="w-3 h-3 text-[var(--muted)]" />
+          <button {...attributes} {...listeners} className="p-0.5 cursor-grab opacity-0 group-hover:opacity-40 hover:!opacity-100 transition-opacity">
+            <GripVertical className="w-2.5 h-2.5 text-[var(--muted)]" />
           </button>
-          <FileCode className={`w-3.5 h-3.5 mx-1 transition-colors ${isActive ? 'text-[var(--active-text)]' : 'text-[var(--muted)]'}`} />
+          <FileCode className={`w-3 h-3 mr-1.5 ${isActive ? 'text-[var(--active-text)]' : 'text-[var(--muted)]'}`} />
           <div className="flex-1 min-w-0" onDoubleClick={(e) => { e.stopPropagation(); onStartEdit(custom.id); }}>
             <button onClick={onSelect} className="w-full text-left">
               <EditableText
@@ -692,16 +703,16 @@ function CustomItem({
                 isEditing={editingId === custom.id}
                 onSave={onUpdateName}
                 onCancel={onCancelEdit}
-                className="text-sm truncate"
+                className={`text-xs truncate ${isActive ? 'text-[var(--active-text)] font-medium' : ''}`}
               />
             </button>
           </div>
           <button
             onClick={onDelete}
-            className="p-0.5 opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-500 transition-all"
-            title="Delete Custom"
+            className="p-0.5 opacity-0 group-hover:opacity-100 hover:bg-red-500/10 rounded transition-opacity"
+            title="Delete"
           >
-            <Trash2 className="w-3 h-3" />
+            <Trash2 className="w-2.5 h-2.5 text-red-400" />
           </button>
         </div>
       </div>

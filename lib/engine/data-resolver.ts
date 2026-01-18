@@ -2,11 +2,13 @@ import type { Custom, Category, Field } from '@/lib/types/core';
 import { buildDependencyGraph, topologicalSort } from './dependency-resolver';
 import { generateFieldValue } from './data-generator';
 import { fetchFieldData } from '@/lib/http/api-fetcher';
+import { applyExportConfig } from './export-transform';
 
 export interface ResolvedData {
   customId: string;
   customName: string;
   data: Record<string, unknown>;
+  exportedData: unknown; // Data after applying export config
   errors: string[];
 }
 
@@ -23,7 +25,7 @@ export async function resolveData(
     const custom = customMap.get(customId);
     if (!custom) continue;
 
-    const result = await resolveCustomData(custom, category, resolvedData);
+    const result = await resolveCustomData(custom, category, resolvedData, customMap);
     resolvedData.set(customId, result);
   }
 
@@ -33,7 +35,8 @@ export async function resolveData(
 async function resolveCustomData(
   custom: Custom,
   category: Category | null | undefined,
-  resolved: Map<string, ResolvedData>
+  resolved: Map<string, ResolvedData>,
+  customMap: Map<string, Custom>
 ): Promise<ResolvedData> {
   const data: Record<string, unknown> = {};
   const errors: string[] = [];
@@ -42,7 +45,7 @@ async function resolveCustomData(
     if (!field.isExported) continue;
 
     try {
-      const value = await resolveFieldValue(field, category, resolved);
+      const value = await resolveFieldValue(field, category, resolved, customMap);
       data[field.key] = value;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -51,10 +54,14 @@ async function resolveCustomData(
     }
   }
 
+  // Apply export config to get the exported form of this data
+  const exportedData = applyExportConfig(data, custom.exportConfig);
+
   return {
     customId: custom.id,
     customName: custom.name,
     data,
+    exportedData,
     errors,
   };
 }
@@ -62,11 +69,12 @@ async function resolveCustomData(
 async function resolveFieldValue(
   field: Field,
   category: Category | null | undefined,
-  resolved: Map<string, ResolvedData>
+  resolved: Map<string, ResolvedData>,
+  customMap: Map<string, Custom>
 ): Promise<unknown> {
   switch (field.type) {
     case 'reference':
-      return resolveReference(field, resolved);
+      return resolveReference(field, resolved, customMap);
 
     case 'api-fetch':
       return resolveApiFetch(field, category);
@@ -78,7 +86,8 @@ async function resolveFieldValue(
 
 function resolveReference(
   field: Field,
-  resolved: Map<string, ResolvedData>
+  resolved: Map<string, ResolvedData>,
+  customMap: Map<string, Custom>
 ): unknown {
   if (!field.referenceId) {
     return null;
@@ -88,6 +97,8 @@ function resolveReference(
   if (!referencedData) {
     throw new Error(`Reference not found: ${field.referenceId}`);
   }
+
+  const referencedCustom = customMap.get(field.referenceId);
 
   // If referenceKey is specified, extract that specific key from the referenced data
   if (field.referenceKey && field.referenceKey.trim()) {
@@ -105,6 +116,11 @@ function resolveReference(
     return value;
   }
 
+  // If the referenced custom has an export config, use the exported data
+  if (referencedCustom?.exportConfig && referencedCustom.exportConfig.type !== 'full') {
+    return referencedData.exportedData;
+  }
+
   return referencedData.data;
 }
 
@@ -116,13 +132,9 @@ async function resolveApiFetch(
     return generateFieldValue({ ...field, type: 'string' });
   }
 
-  // api-fetch requires a category for auth/headers
-  if (!category) {
-    return generateFieldValue({ ...field, type: 'string' });
-  }
-
+  // api-fetch can work without category now
   try {
-    return await fetchFieldData(field, category);
+    return await fetchFieldData(field, category ?? undefined);
   } catch (error) {
     return generateFieldValue({ ...field, type: 'string' });
   }
@@ -130,10 +142,26 @@ async function resolveApiFetch(
 
 export async function resolveSingleCustom(
   custom: Custom,
-  category?: Category | null
+  category?: Category | null,
+  allCustoms?: Custom[]
 ): Promise<ResolvedData> {
+  // If we have all customs, resolve dependencies first
+  if (allCustoms && allCustoms.length > 0) {
+    const customsToResolve = allCustoms.filter(c => c.id !== custom.id);
+    customsToResolve.push(custom); // Add current custom at the end
+
+    const resolvedMap = await resolveData(customsToResolve, category);
+    const result = resolvedMap.get(custom.id);
+
+    if (result) {
+      return result;
+    }
+  }
+
+  // Fallback: resolve without dependencies
   const resolved = new Map<string, ResolvedData>();
-  return resolveCustomData(custom, category, resolved);
+  const customMap = new Map([[custom.id, custom]]);
+  return resolveCustomData(custom, category, resolved, customMap);
 }
 
 export function generatePreviewData(custom: Custom): Record<string, unknown> {
