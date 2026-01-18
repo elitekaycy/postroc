@@ -1,14 +1,14 @@
 'use client';
 
 import { useWorkspaceStore } from '@/lib/store/workspace-store';
-import type { HttpMethod, HttpResponse, FieldType } from '@/lib/types/core';
+import type { HttpMethod, HttpResponse } from '@/lib/types/core';
 import { sendRequest } from '@/lib/http/http-client';
 import { sendRawRequest } from '@/lib/http/http-client';
 import { buildRequestHeaders, buildFullUrl } from '@/lib/http/request-builder';
 import { ResponseViewer } from '@/components/http/response-viewer';
-import { ReferenceSelector } from '@/components/custom/reference-selector';
+import { FieldEditor } from '@/components/custom/field-editor';
 import { DataPreviewPanel } from '@/components/custom/data-preview-panel';
-import { Trash2, Plus, Play, Download } from 'lucide-react';
+import { Plus, Play, Download } from 'lucide-react';
 import { useState } from 'react';
 
 interface CustomEditorProps {
@@ -16,7 +16,6 @@ interface CustomEditorProps {
 }
 
 const HTTP_METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
-const FIELD_TYPES: FieldType[] = ['string', 'number', 'boolean', 'array', 'object', 'reference', 'api-fetch'];
 
 export function CustomEditor({ customId }: CustomEditorProps) {
   const {
@@ -24,8 +23,6 @@ export function CustomEditor({ customId }: CustomEditorProps) {
     getActiveCategory,
     updateCustom,
     addField,
-    updateField,
-    deleteField,
     populateFieldsFromResponse,
   } = useWorkspaceStore();
 
@@ -182,65 +179,12 @@ export function CustomEditor({ customId }: CustomEditorProps) {
             ) : (
               <div className="space-y-1">
                 {custom.fields.map((field) => (
-                  <div key={field.id} className="flex items-center gap-1.5 py-1">
-                    <input
-                      type="checkbox"
-                      checked={field.isExported}
-                      onChange={(e) => updateField(customId, field.id, { isExported: e.target.checked })}
-                      className="w-3 h-3"
-                    />
-
-                    <input
-                      type="text"
-                      value={field.key}
-                      onChange={(e) => updateField(customId, field.id, { key: e.target.value })}
-                      placeholder="key"
-                      className="w-24 h-6 px-1.5 text-xs border border-[var(--border)] rounded bg-[var(--background)]"
-                    />
-
-                    <select
-                      value={field.type}
-                      onChange={(e) => updateField(customId, field.id, { type: e.target.value as FieldType })}
-                      className="h-6 px-1 text-xs border border-[var(--border)] rounded bg-[var(--background)]"
-                    >
-                      {FIELD_TYPES.map((type) => (
-                        <option key={type} value={type}>{type}</option>
-                      ))}
-                    </select>
-
-                    <div className="flex-1">
-                      {field.type === 'reference' ? (
-                        <ReferenceSelector
-                          currentCustomId={customId}
-                          value={field.referenceId}
-                          onChange={(referenceId) => updateField(customId, field.id, { referenceId })}
-                        />
-                      ) : field.type === 'api-fetch' ? (
-                        <input
-                          type="text"
-                          value={field.apiEndpoint || ''}
-                          onChange={(e) => updateField(customId, field.id, { apiEndpoint: e.target.value })}
-                          placeholder="/api/data"
-                          className="w-full h-6 px-1.5 text-xs border border-[var(--border)] rounded bg-[var(--background)]"
-                        />
-                      ) : (
-                        <input
-                          type="text"
-                          value={String(field.value ?? '')}
-                          onChange={(e) => updateField(customId, field.id, { value: e.target.value })}
-                          placeholder="value"
-                          className="w-full h-6 px-1.5 text-xs border border-[var(--border)] rounded bg-[var(--background)]"
-                        />
-                      )}
-                    </div>
-
-                    <button
-                      onClick={() => deleteField(customId, field.id)}
-                      className="p-0.5 text-gray-400 hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
+                  <FieldEditor
+                    key={field.id}
+                    customId={customId}
+                    field={field}
+                    fieldPath={[field.id]}
+                  />
                 ))}
               </div>
             )}

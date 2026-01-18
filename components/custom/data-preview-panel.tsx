@@ -3,6 +3,7 @@
 import type { Custom, Category } from '@/lib/types/core';
 import { generatePreviewData, resolveSingleCustom, ResolvedData } from '@/lib/engine/data-resolver';
 import { exportData, copyToClipboard, ExportFormat } from '@/lib/export/exporters';
+import { SyntaxHighlighter } from '@/components/ui/syntax-highlighter';
 import { Copy, Check } from 'lucide-react';
 import { useState, useCallback, useEffect } from 'react';
 
@@ -60,6 +61,8 @@ export function DataPreviewPanel({ custom, category }: DataPreviewPanelProps) {
           >
             <option value="json">JSON</option>
             <option value="xml">XML</option>
+            <option value="form-data">Form Data</option>
+            <option value="url-encoded">URL Encoded</option>
           </select>
           <button
             onClick={handleResolve}
@@ -82,9 +85,10 @@ export function DataPreviewPanel({ custom, category }: DataPreviewPanelProps) {
       </div>
 
       <div className="flex-1 min-h-0 overflow-auto border border-[var(--border)] rounded bg-[var(--sidebar-bg)]">
-        <pre className="p-3 text-xs font-mono leading-relaxed whitespace-pre-wrap break-all">
-          {formattedData || '{}'}
-        </pre>
+        <SyntaxHighlighter
+          code={formattedData || '{}'}
+          language={exportFormat === 'json' ? 'json' : exportFormat === 'xml' ? 'xml' : 'text'}
+        />
       </div>
     </div>
   );

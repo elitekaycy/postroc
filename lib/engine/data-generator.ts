@@ -6,6 +6,38 @@ export function generateFieldValue(field: Field): unknown {
     return field.value;
   }
 
+  // Handle object and array types with children
+  if (field.type === 'object' && field.children && field.children.length > 0) {
+    const obj: Record<string, unknown> = {};
+    for (const child of field.children) {
+      if (child.isExported) {
+        obj[child.key] = generateFieldValue(child);
+      }
+    }
+    return obj;
+  }
+
+  if (field.type === 'array' && field.children && field.children.length > 0) {
+    const count = faker.number.int({ min: 1, max: 3 });
+    const items: unknown[] = [];
+    for (let i = 0; i < count; i++) {
+      if (field.children.length === 1 && field.children[0].type !== 'object') {
+        // Simple array items
+        items.push(generateFieldValue(field.children[0]));
+      } else {
+        // Array of objects
+        const obj: Record<string, unknown> = {};
+        for (const child of field.children) {
+          if (child.isExported) {
+            obj[child.key] = generateFieldValue(child);
+          }
+        }
+        items.push(obj);
+      }
+    }
+    return items;
+  }
+
   return generateValueForType(field.type, field.key);
 }
 

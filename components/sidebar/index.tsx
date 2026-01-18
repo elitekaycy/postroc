@@ -171,10 +171,60 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
 
   if (isCollapsed) {
     return (
-      <div className="w-12 border-r border-[var(--border)] bg-[var(--sidebar-bg)] flex flex-col items-center py-3 transition-all duration-200">
-        <button onClick={onToggleCollapse} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors" title="Expand sidebar">
-          <PanelLeft className="w-4 h-4 text-gray-500" />
+      <div className="w-12 border-r border-[var(--border)] bg-[var(--sidebar-bg)] flex flex-col items-center py-3 gap-2 transition-all duration-200 overflow-auto">
+        <button onClick={onToggleCollapse} className="p-2 hover:bg-[var(--hover)] rounded-lg transition-colors" title="Expand sidebar">
+          <PanelLeft className="w-4 h-4 text-[var(--muted)]" />
         </button>
+
+        {activeWorkspace && (
+          <>
+            <div className="w-full h-px bg-[var(--border)] my-1" />
+            {activeWorkspace.projects.map((project) => (
+              <div key={project.id} className="flex flex-col items-center gap-1">
+                <button
+                  onClick={() => {
+                    setActiveProject(project.id);
+                    if (!expandedProjects.has(project.id)) toggleProject(project.id);
+                  }}
+                  className={`p-2 rounded-lg transition-colors ${
+                    activeProjectId === project.id ? 'bg-[var(--active-bg)]' : 'hover:bg-[var(--hover)]'
+                  }`}
+                  title={project.name}
+                >
+                  <Folder className={`w-4 h-4 ${activeProjectId === project.id ? 'text-[var(--active-text)]' : 'text-[var(--muted)]'}`} />
+                </button>
+                {expandedProjects.has(project.id) && (
+                  <>
+                    {project.categories.map((category) => (
+                      <button
+                        key={category.id}
+                        onClick={() => setActiveCategory(category.id)}
+                        className={`p-1.5 rounded-md transition-colors ${
+                          activeCategoryId === category.id ? 'bg-[var(--active-bg)]' : 'hover:bg-[var(--hover)]'
+                        }`}
+                        title={category.name}
+                      >
+                        <Box className={`w-3.5 h-3.5 ${activeCategoryId === category.id ? 'text-[var(--active-text)]' : 'text-[var(--muted)]'}`} />
+                      </button>
+                    ))}
+                    {project.customs.map((custom) => (
+                      <button
+                        key={custom.id}
+                        onClick={() => setActiveCustom(custom.id)}
+                        className={`p-1.5 rounded-md transition-colors ${
+                          activeCustomId === custom.id ? 'bg-[var(--active-bg)]' : 'hover:bg-[var(--hover)]'
+                        }`}
+                        title={custom.name}
+                      >
+                        <FileCode className={`w-3.5 h-3.5 ${activeCustomId === custom.id ? 'text-[var(--active-text)]' : 'text-[var(--muted)]'}`} />
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+            ))}
+          </>
+        )}
       </div>
     );
   }
@@ -219,13 +269,13 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
         <div className="flex items-center gap-0.5">
           <button
             onClick={() => activeWorkspaceId && createProject(activeWorkspaceId)}
-            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
+            className="p-1.5 hover:bg-[var(--hover)] rounded-md transition-colors"
             title="Add Project"
           >
-            <Plus className="w-4 h-4 text-gray-500" />
+            <Plus className="w-4 h-4 text-[var(--muted)]" />
           </button>
-          <button onClick={onToggleCollapse} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors">
-            <PanelLeftClose className="w-4 h-4 text-gray-500" />
+          <button onClick={onToggleCollapse} className="p-1.5 hover:bg-[var(--hover)] rounded-md transition-colors" title="Collapse sidebar">
+            <PanelLeftClose className="w-4 h-4 text-[var(--muted)]" />
           </button>
         </div>
       </div>
@@ -236,7 +286,7 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex-1 overflow-auto py-2">
+        <div className="flex-1 overflow-auto py-2 px-2">
           <SortableContext
             items={activeWorkspace?.projects.map((p) => p.id) || []}
             strategy={verticalListSortingStrategy}
@@ -378,17 +428,17 @@ function ProjectItem({
   return (
     <div ref={setNodeRef} style={style}>
       <div
-        className={`group flex items-center h-8 px-2 rounded transition-colors duration-150 ${
-          isActive ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+        className={`group flex items-center h-8 px-2 mx-1 rounded-md transition-all duration-150 ${
+          isActive ? 'bg-[var(--active-bg)] text-[var(--active-text)]' : 'hover:bg-[var(--hover)]'
         }`}
       >
         <button {...attributes} {...listeners} className="p-0.5 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity">
-          <GripVertical className="w-3 h-3 text-gray-400" />
+          <GripVertical className="w-3 h-3 text-[var(--muted)]" />
         </button>
-        <button onClick={onToggle} className="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+        <button onClick={onToggle} className="p-0.5 text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
           {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </button>
-        <Folder className={`w-4 h-4 mx-1 transition-colors ${isActive ? 'text-blue-500' : 'text-gray-400'}`} />
+        <Folder className={`w-4 h-4 mx-1 transition-colors ${isActive ? 'text-[var(--active-text)]' : 'text-[var(--muted)]'}`} />
         <div className="flex-1 min-w-0" onDoubleClick={() => onStartEdit(project.id)}>
           <button onClick={onSelect} className="w-full text-left">
             <EditableText
@@ -401,13 +451,13 @@ function ProjectItem({
           </button>
         </div>
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => onAddCustom()} className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors" title="Add Custom">
+          <button onClick={() => onAddCustom()} className="p-0.5 hover:bg-[var(--hover)] rounded transition-colors" title="Add Custom">
             <Plus className="w-3 h-3" />
           </button>
-          <button onClick={onAddCategory} className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors" title="Add Category">
+          <button onClick={onAddCategory} className="p-0.5 hover:bg-[var(--hover)] rounded transition-colors" title="Add Category">
             <Box className="w-3 h-3" />
           </button>
-          <button onClick={onDelete} className="p-0.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-500 transition-colors">
+          <button onClick={onDelete} className="p-0.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-500 transition-colors" title="Delete Project">
             <Trash2 className="w-3 h-3" />
           </button>
         </div>
@@ -520,17 +570,17 @@ function CategoryItem({
       <div className="flex">
         <TreeLine isLast={isLast && !isExpanded} />
         <div
-          className={`group flex-1 flex items-center h-7 pr-2 rounded-r transition-colors duration-150 ${
-            isActive ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+          className={`group flex-1 flex items-center h-7 pr-2 mr-1 rounded-md transition-all duration-150 ${
+            isActive ? 'bg-[var(--active-bg)] text-[var(--active-text)]' : 'hover:bg-[var(--hover)]'
           }`}
         >
           <button {...attributes} {...listeners} className="p-0.5 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity">
-            <GripVertical className="w-3 h-3 text-gray-400" />
+            <GripVertical className="w-3 h-3 text-[var(--muted)]" />
           </button>
-          <button onClick={onToggle} className="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+          <button onClick={onToggle} className="p-0.5 text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
             {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           </button>
-          <Box className={`w-3.5 h-3.5 mx-1 transition-colors ${isActive ? 'text-blue-500' : 'text-gray-400'}`} />
+          <Box className={`w-3.5 h-3.5 mx-1 transition-colors ${isActive ? 'text-[var(--active-text)]' : 'text-[var(--muted)]'}`} />
           <div className="flex-1 min-w-0" onDoubleClick={() => onStartEdit(category.id)}>
             <button onClick={onSelect} className="w-full text-left">
               <EditableText
@@ -543,10 +593,10 @@ function CategoryItem({
             </button>
           </div>
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={onAddCustom} className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded" title="Add Custom">
+            <button onClick={onAddCustom} className="p-0.5 hover:bg-[var(--hover)] rounded" title="Add Custom">
               <Plus className="w-3 h-3" />
             </button>
-            <button onClick={onDelete} className="p-0.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-500">
+            <button onClick={onDelete} className="p-0.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-500" title="Delete Category">
               <Trash2 className="w-3 h-3" />
             </button>
           </div>
@@ -627,14 +677,14 @@ function CustomItem({
       <div className="flex">
         <TreeLine isLast={isLast} />
         <div
-          className={`group flex-1 flex items-center h-7 pr-2 rounded-r transition-colors duration-150 ${
-            isActive ? 'bg-blue-50 dark:bg-blue-900/20 font-medium' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+          className={`group flex-1 flex items-center h-7 pr-2 mr-1 rounded-md transition-all duration-150 ${
+            isActive ? 'bg-[var(--active-bg)] text-[var(--active-text)] font-medium' : 'hover:bg-[var(--hover)]'
           }`}
         >
           <button {...attributes} {...listeners} className="p-0.5 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity">
-            <GripVertical className="w-3 h-3 text-gray-400" />
+            <GripVertical className="w-3 h-3 text-[var(--muted)]" />
           </button>
-          <FileCode className={`w-3.5 h-3.5 mx-1 transition-colors ${isActive ? 'text-blue-500' : 'text-gray-400'}`} />
+          <FileCode className={`w-3.5 h-3.5 mx-1 transition-colors ${isActive ? 'text-[var(--active-text)]' : 'text-[var(--muted)]'}`} />
           <div className="flex-1 min-w-0" onDoubleClick={(e) => { e.stopPropagation(); onStartEdit(custom.id); }}>
             <button onClick={onSelect} className="w-full text-left">
               <EditableText
@@ -649,6 +699,7 @@ function CustomItem({
           <button
             onClick={onDelete}
             className="p-0.5 opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-500 transition-all"
+            title="Delete Custom"
           >
             <Trash2 className="w-3 h-3" />
           </button>

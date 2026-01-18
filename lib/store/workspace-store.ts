@@ -59,6 +59,9 @@ interface WorkspaceStore {
   updateField: (customId: string, fieldId: string, updates: Partial<Field>) => void;
   deleteField: (customId: string, fieldId: string) => void;
   reorderFields: (customId: string, fieldIds: string[]) => void;
+  addNestedField: (customId: string, parentFieldId: string, field: Omit<Field, 'id'>) => void;
+  updateNestedField: (customId: string, fieldPath: string[], updates: Partial<Field>) => void;
+  deleteNestedField: (customId: string, fieldPath: string[]) => void;
   populateFieldsFromResponse: (customId: string, data: Record<string, unknown>) => void;
 
   setActiveWorkspace: (id: string | null) => void;
@@ -739,6 +742,131 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
                 }
                 custom.fields = reordered;
                 custom.updatedAt = Date.now();
+                return;
+              }
+            }
+          }
+        }
+      }),
+
+    addNestedField: (customId: string, parentFieldId: string, field: Omit<Field, 'id'>) =>
+      set((state) => {
+        const findAndAddNested = (fields: Field[]): boolean => {
+          for (const f of fields) {
+            if (f.id === parentFieldId) {
+              if (!f.children) f.children = [];
+              f.children.push({ ...field, id: crypto.randomUUID() });
+              return true;
+            }
+            if (f.children && findAndAddNested(f.children)) {
+              return true;
+            }
+          }
+          return false;
+        };
+
+        for (const workspace of state.workspaces) {
+          for (const project of workspace.projects) {
+            const projectCustom = project.customs.find((c) => c.id === customId);
+            if (projectCustom) {
+              if (findAndAddNested(projectCustom.fields)) {
+                projectCustom.updatedAt = Date.now();
+              }
+              return;
+            }
+            for (const category of project.categories) {
+              const custom = category.customs.find((c) => c.id === customId);
+              if (custom) {
+                if (findAndAddNested(custom.fields)) {
+                  custom.updatedAt = Date.now();
+                }
+                return;
+              }
+            }
+          }
+        }
+      }),
+
+    updateNestedField: (customId: string, fieldPath: string[], updates: Partial<Field>) =>
+      set((state) => {
+        const findAndUpdate = (fields: Field[], path: string[], depth: number): boolean => {
+          if (depth >= path.length) return false;
+          const targetId = path[depth];
+          for (const f of fields) {
+            if (f.id === targetId) {
+              if (depth === path.length - 1) {
+                Object.assign(f, updates);
+                return true;
+              }
+              if (f.children) {
+                return findAndUpdate(f.children, path, depth + 1);
+              }
+              return false;
+            }
+          }
+          return false;
+        };
+
+        for (const workspace of state.workspaces) {
+          for (const project of workspace.projects) {
+            const projectCustom = project.customs.find((c) => c.id === customId);
+            if (projectCustom) {
+              if (findAndUpdate(projectCustom.fields, fieldPath, 0)) {
+                projectCustom.updatedAt = Date.now();
+              }
+              return;
+            }
+            for (const category of project.categories) {
+              const custom = category.customs.find((c) => c.id === customId);
+              if (custom) {
+                if (findAndUpdate(custom.fields, fieldPath, 0)) {
+                  custom.updatedAt = Date.now();
+                }
+                return;
+              }
+            }
+          }
+        }
+      }),
+
+    deleteNestedField: (customId: string, fieldPath: string[]) =>
+      set((state) => {
+        const findAndDelete = (fields: Field[], path: string[], depth: number): boolean => {
+          if (depth >= path.length) return false;
+          const targetId = path[depth];
+
+          if (depth === path.length - 1) {
+            const index = fields.findIndex((f) => f.id === targetId);
+            if (index !== -1) {
+              fields.splice(index, 1);
+              return true;
+            }
+            return false;
+          }
+
+          for (const f of fields) {
+            if (f.children && findAndDelete(f.children, path, depth + 1)) {
+              return true;
+            }
+          }
+          return false;
+        };
+
+        for (const workspace of state.workspaces) {
+          for (const project of workspace.projects) {
+            const projectCustom = project.customs.find((c) => c.id === customId);
+            if (projectCustom) {
+              if (findAndDelete(projectCustom.fields, fieldPath, 0)) {
+                projectCustom.updatedAt = Date.now();
+              }
+              return;
+            }
+            for (const category of project.categories) {
+              const custom = category.customs.find((c) => c.id === customId);
+              if (custom) {
+                if (findAndDelete(custom.fields, fieldPath, 0)) {
+                  custom.updatedAt = Date.now();
+                }
                 return;
               }
             }

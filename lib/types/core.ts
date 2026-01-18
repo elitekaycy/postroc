@@ -58,9 +58,11 @@ export interface Field {
   type: FieldType;
   value?: unknown;
   referenceId?: string;
+  referenceKey?: string; // Specific key to extract from referenced object
   apiEndpoint?: string;
   isExported: boolean;
   description?: string;
+  children?: Field[]; // Nested fields for object/array types
 }
 
 export interface Custom {

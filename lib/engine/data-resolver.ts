@@ -89,6 +89,22 @@ function resolveReference(
     throw new Error(`Reference not found: ${field.referenceId}`);
   }
 
+  // If referenceKey is specified, extract that specific key from the referenced data
+  if (field.referenceKey && field.referenceKey.trim()) {
+    const keys = field.referenceKey.split('.');
+    let value: unknown = referencedData.data;
+
+    for (const key of keys) {
+      if (value && typeof value === 'object' && key in value) {
+        value = (value as Record<string, unknown>)[key];
+      } else {
+        return null;
+      }
+    }
+
+    return value;
+  }
+
   return referencedData.data;
 }
 
@@ -127,7 +143,10 @@ export function generatePreviewData(custom: Custom): Record<string, unknown> {
     if (!field.isExported) continue;
 
     if (field.type === 'reference') {
-      data[field.key] = { _ref: field.referenceId };
+      const refLabel = field.referenceKey
+        ? `${field.referenceId}.${field.referenceKey}`
+        : field.referenceId;
+      data[field.key] = { _ref: refLabel };
     } else if (field.type === 'api-fetch') {
       data[field.key] = { _fetch: field.apiEndpoint };
     } else {
