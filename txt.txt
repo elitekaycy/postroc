@@ -1,0 +1,16 @@
+- so when we get an object type i feel like we are supposed to also populate the field of the object too aswell and edit them, so it shows on the preview etc,
+
+- the way the reference work i can reference customs, if it from an api, look at the scheme and fetch the api and populate the msin referenceing the custom based on what the person selected for the export custom category, (i should be able to only involve a key value as what to use as ref in another custom when resolving, any data type aswell, and even selective, so eg if its an obj maybe i just want id and number etc)
+
+- also its possible that some of the endpoints would return array of objects numbers etc basically encapsulate other data types, lets take into account that and provide ways for those datatypes (array, object) to encapsulate other datatypes editable and parseable aswell
+
+- when sidebar is closed lets use icons to show the file tree
+- please lets fix the fonts,
+- please lets add themes
+- cvan we make the preview, json and xml syntax highlighting and lets add formdata and url encoded as options
+
+- lets fix the interactivity design for the sidebar, the hover sholuld be visble, the active color should be seperate from the project, lets do that thing where the select or etc doesnt touch the edges of the sidebar, it has the border a little bit rounded
+
+- lets add some correct tooltips
+- lets use lighter shades for the themes
+
