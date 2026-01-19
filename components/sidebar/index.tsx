@@ -1,6 +1,7 @@
 'use client';
 
 import { useWorkspaceStore } from '@/lib/store/workspace-store';
+import { useNavigation } from '@/lib/hooks/use-navigation';
 import { EditableText } from './editable-text';
 import {
   DndContext,
@@ -51,9 +52,6 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
     activeCategoryId,
     activeCustomId,
     editingId,
-    setActiveProject,
-    setActiveCategory,
-    setActiveCustom,
     setEditingId,
     createWorkspace,
     createProject,
@@ -73,6 +71,8 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
     moveCustom,
     clearAllData,
   } = useWorkspaceStore();
+
+  const { navigateToProject, navigateToCategory, navigateToCustom } = useNavigation();
 
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
@@ -205,7 +205,7 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
               <div key={project.id} className="flex flex-col items-center gap-1">
                 <button
                   onClick={() => {
-                    setActiveProject(project.id);
+                    navigateToProject(project.id);
                     if (!expandedProjects.has(project.id)) toggleProject(project.id);
                   }}
                   className={`p-2 rounded-lg transition-colors ${
@@ -220,7 +220,7 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
                     {project.categories.map((category) => (
                       <button
                         key={category.id}
-                        onClick={() => setActiveCategory(category.id)}
+                        onClick={() => navigateToCategory(category.id)}
                         className={`p-1.5 rounded-md transition-colors ${
                           activeCategoryId === category.id ? 'bg-[var(--active-bg)]' : 'hover:bg-[var(--hover)]'
                         }`}
@@ -232,7 +232,7 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
                     {project.customs.map((custom) => (
                       <button
                         key={custom.id}
-                        onClick={() => setActiveCustom(custom.id)}
+                        onClick={() => navigateToCustom(custom.id)}
                         className={`p-1.5 rounded-md transition-colors ${
                           activeCustomId === custom.id ? 'bg-[var(--active-bg)]' : 'hover:bg-[var(--hover)]'
                         }`}
@@ -372,7 +372,7 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
                 onToggle={() => toggleProject(project.id)}
                 onSelect={() => {
                   if (!expandedProjects.has(project.id)) toggleProject(project.id);
-                  setActiveProject(project.id);
+                  navigateToProject(project.id);
                 }}
                 onStartEdit={setEditingId}
                 onUpdateName={(name) => {
@@ -386,14 +386,14 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
                 onToggleCategory={toggleCategory}
                 onSelectCategory={(id) => {
                   if (!expandedCategories.has(id)) toggleCategory(id);
-                  setActiveCategory(id);
+                  navigateToCategory(id);
                 }}
                 onUpdateCategory={(id, name) => {
                   updateCategory(id, { name });
                   setEditingId(null);
                 }}
                 onDeleteCategory={deleteCategory}
-                onSelectCustom={setActiveCustom}
+                onSelectCustom={navigateToCustom}
                 onUpdateCustom={(id, name) => {
                   updateCustom(id, { name });
                   setEditingId(null);
