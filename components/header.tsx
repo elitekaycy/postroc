@@ -8,23 +8,23 @@ export function Header() {
   const { theme, toggleTheme, mounted } = useTheme();
 
   return (
-    <header className="h-10 border-b border-[var(--border)] flex items-center justify-between px-4">
+    <div className="flex-1 flex items-center justify-between">
       <Breadcrumb />
       <div className="flex items-center gap-2">
         {mounted && (
           <button
             onClick={toggleTheme}
-            className="p-1.5 hover:bg-[var(--hover)] rounded-md transition-colors"
+            className="p-1.5 hover:bg-accent rounded-md transition-colors"
             title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
           >
             {theme === 'light' ? (
-              <Moon className="w-3.5 h-3.5 text-gray-500" />
+              <Moon className="w-3.5 h-3.5 text-muted-foreground" />
             ) : (
-              <Sun className="w-3.5 h-3.5 text-gray-400" />
+              <Sun className="w-3.5 h-3.5 text-muted-foreground" />
             )}
           </button>
         )}
       </div>
-    </header>
+    </div>
   );
 }

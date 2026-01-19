@@ -20,8 +20,10 @@ export function useTheme() {
   const applyTheme = (newTheme: Theme) => {
     if (newTheme === 'dark') {
       document.documentElement.setAttribute('data-theme', 'dark');
+      document.documentElement.classList.add('dark');
     } else {
       document.documentElement.removeAttribute('data-theme');
+      document.documentElement.classList.remove('dark');
     }
   };
 
