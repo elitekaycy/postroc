@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import type {
   Workspace,
@@ -16,6 +17,19 @@ import {
   populateFieldsFromObject,
   extractFieldsFromResponse,
 } from '@/lib/engine/field-populator';
+import {
+  exportWorkspace,
+  exportProject,
+  exportCategory,
+  exportToJSON,
+  type PostrocExport,
+} from '@/lib/export/workspace-export';
+import {
+  validateImport,
+  importFromExport,
+  type ImportMode,
+  type ImportResult,
+} from '@/lib/export/workspace-import';
 
 interface WorkspaceStore {
   workspaces: Workspace[];
@@ -72,6 +86,13 @@ interface WorkspaceStore {
 
   getActiveCategory: () => Category | null;
   getActiveCustom: () => Custom | null;
+
+  // Export/Import
+  exportWorkspaceToJSON: (workspaceId: string, includeSecrets?: boolean) => string | null;
+  exportProjectToJSON: (projectId: string, includeSecrets?: boolean) => string | null;
+  exportCategoryToJSON: (categoryId: string, includeSecrets?: boolean) => string | null;
+  importFromJSON: (content: string, mode: ImportMode) => ImportResult;
+  clearAllData: () => void;
 }
 
 const createDefaultCategoryConfig = (projectId: string, name: string): CategoryConfig => ({
@@ -92,14 +113,18 @@ const createDefaultCategoryConfig = (projectId: string, name: string): CategoryC
 
 let lastCreatedId: string | null = null;
 
+const STORAGE_KEY = 'postroc-workspaces';
+const STORAGE_VERSION = 1;
+
 export const useWorkspaceStore = create<WorkspaceStore>()(
-  immer((set, get) => ({
-    workspaces: [],
-    activeWorkspaceId: null,
-    activeProjectId: null,
-    activeCategoryId: null,
-    activeCustomId: null,
-    editingId: null,
+  persist(
+    immer((set, get) => ({
+      workspaces: [],
+      activeWorkspaceId: null,
+      activeProjectId: null,
+      activeCategoryId: null,
+      activeCustomId: null,
+      editingId: null,
 
     createWorkspace: (name?: string) => {
       const id = crypto.randomUUID();
@@ -996,5 +1021,154 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
       }
       return null;
     },
-  }))
+
+    // Export/Import
+    exportWorkspaceToJSON: (workspaceId: string, includeSecrets = false) => {
+      const state = get();
+      const exportData = exportWorkspace(state.workspaces, workspaceId, { includeSecrets });
+      return exportData ? exportToJSON(exportData) : null;
+    },
+
+    exportProjectToJSON: (projectId: string, includeSecrets = false) => {
+      const state = get();
+      const exportData = exportProject(state.workspaces, projectId, { includeSecrets });
+      return exportData ? exportToJSON(exportData) : null;
+    },
+
+    exportCategoryToJSON: (categoryId: string, includeSecrets = false) => {
+      const state = get();
+      const exportData = exportCategory(state.workspaces, categoryId, { includeSecrets });
+      return exportData ? exportToJSON(exportData) : null;
+    },
+
+    importFromJSON: (content: string, mode: ImportMode): ImportResult => {
+      const validation = validateImport(content);
+      if (!validation.valid || !validation.data) {
+        return { success: false, error: validation.error };
+      }
+
+      const state = get();
+      const result = importFromExport(
+        validation.data,
+        state.activeWorkspaceId || undefined,
+        state.activeProjectId || undefined
+      );
+
+      if (!result.success || !result.data) {
+        return result;
+      }
+
+      // Apply the import based on mode
+      if (mode === 'replace') {
+        // Clear existing data first
+        set((s) => {
+          s.workspaces = [];
+          s.activeWorkspaceId = null;
+          s.activeProjectId = null;
+          s.activeCategoryId = null;
+          s.activeCustomId = null;
+        });
+      }
+
+      // Add the imported data
+      if (result.data.type === 'workspace' && result.data.workspaces) {
+        set((s) => {
+          for (const workspace of result.data!.workspaces!) {
+            s.workspaces.push(workspace);
+          }
+          if (result.data!.workspaces!.length > 0) {
+            s.activeWorkspaceId = result.data!.workspaces![0].id;
+          }
+        });
+      } else if (result.data.type === 'project' && result.data.projects) {
+        set((s) => {
+          // Find or create workspace
+          let workspace = s.workspaces.find((w) => w.id === s.activeWorkspaceId);
+          if (!workspace) {
+            workspace = {
+              id: crypto.randomUUID(),
+              name: 'Imported Workspace',
+              projects: [],
+              createdAt: Date.now(),
+            };
+            s.workspaces.push(workspace);
+            s.activeWorkspaceId = workspace.id;
+          }
+
+          for (const project of result.data!.projects!) {
+            project.workspaceId = workspace.id;
+            workspace.projects.push(project);
+          }
+
+          if (result.data!.projects!.length > 0) {
+            s.activeProjectId = result.data!.projects![0].id;
+          }
+        });
+      } else if (result.data.type === 'category' && result.data.categories) {
+        set((s) => {
+          // Find or create workspace and project
+          let workspace = s.workspaces.find((w) => w.id === s.activeWorkspaceId);
+          if (!workspace) {
+            workspace = {
+              id: crypto.randomUUID(),
+              name: 'Imported Workspace',
+              projects: [],
+              createdAt: Date.now(),
+            };
+            s.workspaces.push(workspace);
+            s.activeWorkspaceId = workspace.id;
+          }
+
+          let project = workspace.projects.find((p) => p.id === s.activeProjectId);
+          if (!project) {
+            project = {
+              id: crypto.randomUUID(),
+              name: 'Imported Project',
+              workspaceId: workspace.id,
+              categories: [],
+              customs: [],
+              createdAt: Date.now(),
+            };
+            workspace.projects.push(project);
+            s.activeProjectId = project.id;
+          }
+
+          for (const category of result.data!.categories!) {
+            category.projectId = project.id;
+            category.config.projectId = project.id;
+            project.categories.push(category);
+          }
+
+          if (result.data!.categories!.length > 0) {
+            s.activeCategoryId = result.data!.categories![0].id;
+          }
+        });
+      }
+
+      return result;
+    },
+
+    clearAllData: () =>
+      set((state) => {
+        state.workspaces = [];
+        state.activeWorkspaceId = null;
+        state.activeProjectId = null;
+        state.activeCategoryId = null;
+        state.activeCustomId = null;
+        state.editingId = null;
+      }),
+  })),
+    {
+      name: STORAGE_KEY,
+      version: STORAGE_VERSION,
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        workspaces: state.workspaces,
+        activeWorkspaceId: state.activeWorkspaceId,
+        activeProjectId: state.activeProjectId,
+        activeCategoryId: state.activeCategoryId,
+        activeCustomId: state.activeCustomId,
+      }),
+    }
+  )
 );

@@ -1,0 +1,53 @@
+i noticed i have an issue wit the array type, its harder to create an array type of just particlular fields, what i noticed is if i add two or more items, they all default to object types key value, but i want the option to have like an arrya of multiple datatypes and etc.
+can we fix the array parsing...
+
+
+in the category, remove staging and production and local environment optiuons, we just have one environment and we can chanage the url for that category manually on the url edit page, no environment switchong,
+
+
+fix the sidbar. read sidebar.md at /docs and lets improve the ui ux, maybe add shadcn sidebar and revamp.. maintain all functionalities
+
+
+workspace should be created by default if no workspace found in localstorage or etc
+and naming  i would prefare 
+worksapce-{uniqueId}
+project-{uniqueId}
+etc category and custom same format for defaults instead of Workspace-1 or Project-1 etc  NO CAPS
+
+lets now move the sidebar items to route based so that i can add landing page aswell
+
+http://localhost:3000/ --landing page (dont create the landing page yet)
+http://localhost:3000/workspace/workspace-laksjhdfg --workspace
+http://localhost:3000/workspace/workspace-laksjhdfg/project-ekwqwjrf --project
+http://localhost:3000/workspace/workspace-laksjhdfg/project-ekwqwjrf --project/custom-qwkjsqwe   -- custom
+http://localhost:3000/workspace/workspace-laksjhdfg/project-ekwqwjrf --project/category-ksjdfgla   -- category
+http://localhost:3000/workspace/workspace-laksjhdfg/project-ekwqwjrf --project/category-ksjdfgla/custom-aklsjgt   -- custom in category
+
+the above should help us improve persistens and storage
+
+ui fix. use fullpaths in the breadcrumb aswell
+
+
+also can we look at some default headers to add automatically that would be awesome., think of the default ones postman add to requests or insomnia add to request, to be able to run locally and bypass some isues
+
+
+the RESPONSE section in the custom should be collapsible
+
+
+later below...
+
+name postroc.scalestash.com
+lets work on the landig page.
+  - navigatgion plus cta (open workspace)
+  - hero page - cta plus we show a video of how it works
+  - features (import, export workspace etc, cli etc)
+  - steps to install the cli
+  - faq, email, foooter
+  
+
+lets create a docker file, and lets create a ci/cd githbut pipeline to build to docker
+
+have another pipeline to pull from docker and run on my server,
+
+
+

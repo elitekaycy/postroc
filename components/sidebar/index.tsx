@@ -29,8 +29,14 @@ import {
   GripVertical,
   PanelLeftClose,
   PanelLeft,
+  MoreVertical,
+  Download,
+  Upload,
+  Trash,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { ExportDialog } from '@/components/dialogs/export-dialog';
+import { ImportDialog } from '@/components/dialogs/import-dialog';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -65,11 +71,27 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
     reorderCustoms,
     moveCategory,
     moveCustom,
+    clearAllData,
   } = useWorkspaceStore();
 
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [draggedItem, setDraggedItem] = useState<{ type: string; id: string; name: string } | null>(null);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -274,6 +296,52 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
           >
             <Plus className="w-4 h-4 text-[var(--muted)]" />
           </button>
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="p-1.5 hover:bg-[var(--hover)] rounded-md transition-colors"
+              title="More options"
+            >
+              <MoreVertical className="w-4 h-4 text-[var(--muted)]" />
+            </button>
+            {showMenu && (
+              <div className="absolute right-0 top-full mt-1 w-36 bg-[var(--background)] border border-[var(--border)] rounded-md shadow-lg z-50">
+                <button
+                  onClick={() => {
+                    setShowExportDialog(true);
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-[var(--hover)] text-left"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Export...
+                </button>
+                <button
+                  onClick={() => {
+                    setShowImportDialog(true);
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-[var(--hover)] text-left"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  Import...
+                </button>
+                <div className="h-px bg-[var(--border)] my-1" />
+                <button
+                  onClick={() => {
+                    if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
+                      clearAllData();
+                    }
+                    setShowMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-[var(--hover)] text-left text-red-400"
+                >
+                  <Trash className="w-3.5 h-3.5" />
+                  Clear All
+                </button>
+              </div>
+            )}
+          </div>
           <button onClick={onToggleCollapse} className="p-1.5 hover:bg-[var(--hover)] rounded-md transition-colors" title="Collapse sidebar">
             <PanelLeftClose className="w-4 h-4 text-[var(--muted)]" />
           </button>
@@ -344,6 +412,9 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
           )}
         </DragOverlay>
       </DndContext>
+
+      <ExportDialog isOpen={showExportDialog} onClose={() => setShowExportDialog(false)} />
+      <ImportDialog isOpen={showImportDialog} onClose={() => setShowImportDialog(false)} />
     </div>
   );
 }
