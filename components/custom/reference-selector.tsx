@@ -110,35 +110,35 @@ export function ReferenceSelector({ currentCustomId, value, onChange }: Referenc
   };
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative flex-1" ref={dropdownRef}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-1.5 text-sm border border-[var(--border)] rounded bg-[var(--background)] text-left"
+        className="w-full h-6 flex items-center justify-between px-1.5 text-xs border border-[var(--border)] rounded bg-[var(--background)] text-left"
       >
-        <span className={selectedCustom ? '' : 'text-gray-500'}>
-          {selectedCustom ? selectedCustom.name : 'Select reference...'}
+        <span className={`truncate ${selectedCustom ? '' : 'text-gray-400'}`}>
+          {selectedCustom ? selectedCustom.name : 'Select...'}
         </span>
-        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-3 h-3 flex-shrink-0 ml-1 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--background)] border border-[var(--border)] rounded-md shadow-lg z-50 max-h-64 overflow-hidden">
-          <div className="p-2 border-b border-[var(--border)]">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--background)] border border-[var(--border)] rounded shadow-lg z-50 max-h-56 overflow-hidden min-w-[180px]">
+          <div className="p-1.5 border-b border-[var(--border)]">
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search customs..."
-              className="w-full px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--background)]"
+              placeholder="Search..."
+              className="w-full h-6 px-1.5 text-xs border border-[var(--border)] rounded bg-[var(--background)]"
               autoFocus
             />
           </div>
 
-          <div className="overflow-auto max-h-48">
+          <div className="overflow-auto max-h-40">
             {filteredCategoryCustoms.length > 0 && (
               <div>
-                <div className="px-3 py-1.5 text-xs font-medium text-gray-500 bg-[var(--sidebar-bg)]">
+                <div className="px-2 py-1 text-[10px] font-medium text-gray-400 bg-[var(--sidebar-bg)]">
                   Current Category
                 </div>
                 {filteredCategoryCustoms.map((custom) => {
@@ -148,14 +148,14 @@ export function ReferenceSelector({ currentCustomId, value, onChange }: Referenc
                       key={custom.id}
                       onClick={() => !wouldCycle && handleSelect(custom.id)}
                       disabled={wouldCycle}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-[var(--hover)] ${
+                      className={`w-full flex items-center gap-1.5 px-2 py-1.5 text-xs text-left hover:bg-[var(--hover)] ${
                         wouldCycle ? 'opacity-50 cursor-not-allowed' : ''
                       } ${value === custom.id ? 'bg-[var(--hover)]' : ''}`}
                     >
-                      <span className="flex-1">{custom.name}</span>
+                      <span className="flex-1 truncate">{custom.name}</span>
                       {wouldCycle && (
-                        <span className="flex items-center gap-1 text-xs text-yellow-600">
-                          <AlertTriangle className="w-3 h-3" />
+                        <span className="flex items-center gap-0.5 text-[10px] text-yellow-600">
+                          <AlertTriangle className="w-2.5 h-2.5" />
                           Cycle
                         </span>
                       )}
@@ -167,7 +167,7 @@ export function ReferenceSelector({ currentCustomId, value, onChange }: Referenc
 
             {filteredOtherCustoms.length > 0 && (
               <div>
-                <div className="px-3 py-1.5 text-xs font-medium text-gray-500 bg-[var(--sidebar-bg)]">
+                <div className="px-2 py-1 text-[10px] font-medium text-gray-400 bg-[var(--sidebar-bg)]">
                   Other Customs
                 </div>
                 {filteredOtherCustoms.map((custom) => {
@@ -177,18 +177,18 @@ export function ReferenceSelector({ currentCustomId, value, onChange }: Referenc
                       key={custom.id}
                       onClick={() => !wouldCycle && handleSelect(custom.id)}
                       disabled={wouldCycle}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-[var(--hover)] ${
+                      className={`w-full flex items-center gap-1.5 px-2 py-1.5 text-xs text-left hover:bg-[var(--hover)] ${
                         wouldCycle ? 'opacity-50 cursor-not-allowed' : ''
                       } ${value === custom.id ? 'bg-[var(--hover)]' : ''}`}
                     >
-                      <span className="flex-1">{custom.name}</span>
+                      <span className="flex-1 truncate">{custom.name}</span>
                       {wouldCycle ? (
-                        <span className="flex items-center gap-1 text-xs text-yellow-600">
-                          <AlertTriangle className="w-3 h-3" />
+                        <span className="flex items-center gap-0.5 text-[10px] text-yellow-600">
+                          <AlertTriangle className="w-2.5 h-2.5" />
                           Cycle
                         </span>
                       ) : (
-                        <span className="text-xs text-gray-500">{custom.categoryName}</span>
+                        <span className="text-[10px] text-gray-400 truncate">{custom.categoryName}</span>
                       )}
                     </button>
                   );
@@ -197,7 +197,7 @@ export function ReferenceSelector({ currentCustomId, value, onChange }: Referenc
             )}
 
             {filteredCategoryCustoms.length === 0 && filteredOtherCustoms.length === 0 && (
-              <div className="px-3 py-4 text-sm text-gray-500 text-center">
+              <div className="px-2 py-3 text-xs text-gray-400 text-center">
                 No customs found
               </div>
             )}

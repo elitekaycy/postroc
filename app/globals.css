@@ -6,8 +6,8 @@
   --border: #e4e4e7;
   --sidebar-bg: #f4f4f5;
   --hover: #e4e4e7;
-  --active-bg: #e0e7ff;
-  --active-text: #4f46e5;
+  --active-bg: #d4d4d8;
+  --active-text: #18181b;
   --muted: #71717a;
   --card-bg: #ffffff;
 }
@@ -18,8 +18,8 @@
   --border: #3f3f46;
   --sidebar-bg: #27272a;
   --hover: #3f3f46;
-  --active-bg: #312e81;
-  --active-text: #a5b4fc;
+  --active-bg: #52525b;
+  --active-text: #fafafa;
   --muted: #a1a1aa;
   --card-bg: #27272a;
 }

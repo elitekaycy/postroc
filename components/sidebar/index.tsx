@@ -286,7 +286,7 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex-1 overflow-auto py-2 px-2">
+        <div className="flex-1 overflow-auto py-2 px-2 space-y-3">
           <SortableContext
             items={activeWorkspace?.projects.map((p) => p.id) || []}
             strategy={verticalListSortingStrategy}
@@ -471,7 +471,7 @@ function ProjectItem({
       </div>
 
       {isExpanded && (
-        <div className="ml-4">
+        <div className="ml-4 mt-1 space-y-0.5">
           {/* Project-level customs */}
           <SortableContext items={project.customs.map((c) => c.id)} strategy={verticalListSortingStrategy}>
             {project.customs.map((custom, idx) => (
@@ -490,6 +490,9 @@ function ProjectItem({
               />
             ))}
           </SortableContext>
+
+          {/* Spacing between customs and categories */}
+          {project.customs.length > 0 && project.categories.length > 0 && <div className="h-1.5" />}
 
           {/* Categories */}
           <SortableContext items={project.categories.map((c) => c.id)} strategy={verticalListSortingStrategy}>

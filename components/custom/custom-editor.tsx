@@ -149,18 +149,19 @@ export function CustomEditor({ customId }: CustomEditorProps) {
         <button
           onClick={handleFetchAndPopulate}
           disabled={isFetching || !custom.requestConfig?.endpoint}
-          className="h-8 px-3 text-xs border border-[var(--border)] rounded hover:bg-[var(--hover)] disabled:opacity-40 transition-colors"
-          title="Fetch and populate fields"
+          className="h-8 px-3 text-xs border border-[var(--border)] rounded hover:bg-[var(--hover)] disabled:opacity-40 transition-colors flex items-center gap-1.5"
         >
-          <Download className="w-3.5 h-3.5" />
+          <Download className="w-3 h-3" />
+          <span>{isFetching ? 'Fetching...' : 'Fetch'}</span>
         </button>
 
         <button
           onClick={handleSendRequest}
           disabled={isLoading}
-          className="h-8 px-3 text-xs border border-[var(--border)] rounded hover:bg-[var(--hover)] disabled:opacity-40 transition-colors"
+          className="h-8 px-3 text-xs border border-[var(--border)] rounded hover:bg-[var(--hover)] disabled:opacity-40 transition-colors flex items-center gap-1.5"
         >
-          <Play className="w-3.5 h-3.5" />
+          <Play className="w-3 h-3" />
+          <span>{isLoading ? 'Sending...' : 'Send'}</span>
         </button>
       </div>
 
