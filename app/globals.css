@@ -44,3 +44,47 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* Custom scrollbar styling - minimal design */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* Firefox scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+/* Hide scrollbar for specific containers but keep functionality */
+.scrollbar-hidden::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.scrollbar-hidden {
+  scrollbar-width: none;
+}
+
+/* Show scrollbar on hover for containers with this class */
+.scrollbar-on-hover::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+.scrollbar-on-hover:hover::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
