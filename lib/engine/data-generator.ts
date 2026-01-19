@@ -1,12 +1,12 @@
 import { faker } from '@faker-js/faker';
-import type { Field, FieldType } from '@/lib/types/core';
+import type { Field, FieldType, ArrayItemType } from '@/lib/types/core';
 
 export function generateFieldValue(field: Field): unknown {
   if (field.value !== undefined && field.value !== null && field.value !== '') {
     return field.value;
   }
 
-  // Handle object and array types with children
+  // Handle object type with children
   if (field.type === 'object' && field.children && field.children.length > 0) {
     const obj: Record<string, unknown> = {};
     for (const child of field.children) {
@@ -17,15 +17,15 @@ export function generateFieldValue(field: Field): unknown {
     return obj;
   }
 
-  if (field.type === 'array' && field.children && field.children.length > 0) {
-    const count = faker.number.int({ min: 1, max: 3 });
+  // Handle array type with new arrayItemType property
+  if (field.type === 'array') {
+    const count = field.arrayCount ?? 3;
+    const itemType = field.arrayItemType || 'string';
     const items: unknown[] = [];
+
     for (let i = 0; i < count; i++) {
-      if (field.children.length === 1 && field.children[0].type !== 'object') {
-        // Simple array items
-        items.push(generateFieldValue(field.children[0]));
-      } else {
-        // Array of objects
+      if (itemType === 'object' && field.children && field.children.length > 0) {
+        // Array of objects with defined structure
         const obj: Record<string, unknown> = {};
         for (const child of field.children) {
           if (child.isExported) {
@@ -33,12 +33,40 @@ export function generateFieldValue(field: Field): unknown {
           }
         }
         items.push(obj);
+      } else {
+        // Array of primitives
+        items.push(generatePrimitiveValue(itemType, field.key));
       }
     }
     return items;
   }
 
   return generateValueForType(field.type, field.key);
+}
+
+function generatePrimitiveValue(type: ArrayItemType, key: string): unknown {
+  const keyLower = key.toLowerCase();
+
+  switch (type) {
+    case 'string':
+      if (keyLower.includes('email')) return faker.internet.email();
+      if (keyLower.includes('name')) return faker.person.fullName();
+      if (keyLower.includes('tag')) return faker.lorem.word();
+      if (keyLower.includes('id')) return faker.string.uuid();
+      return faker.lorem.word();
+    case 'number':
+      if (keyLower.includes('price') || keyLower.includes('amount')) {
+        return parseFloat(faker.commerce.price());
+      }
+      if (keyLower.includes('id')) return faker.number.int({ min: 1, max: 10000 });
+      return faker.number.int({ min: 1, max: 100 });
+    case 'boolean':
+      return faker.datatype.boolean();
+    case 'object':
+      return {};
+    default:
+      return faker.lorem.word();
+  }
 }
 
 function generateValueForType(type: FieldType, key: string): unknown {

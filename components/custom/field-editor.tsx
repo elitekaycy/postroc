@@ -1,12 +1,13 @@
 'use client';
 
 import { useWorkspaceStore } from '@/lib/store/workspace-store';
-import type { Field, FieldType } from '@/lib/types/core';
+import type { Field, FieldType, ArrayItemType } from '@/lib/types/core';
 import { ReferenceSelector } from '@/components/custom/reference-selector';
 import { Trash2, Plus, ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 
 const FIELD_TYPES: FieldType[] = ['string', 'number', 'boolean', 'array', 'object', 'reference', 'api-fetch'];
+const ARRAY_ITEM_TYPES: ArrayItemType[] = ['string', 'number', 'boolean', 'object'];
 
 interface FieldEditorProps {
   customId: string;
@@ -19,7 +20,9 @@ export function FieldEditor({ customId, field, fieldPath, depth = 0 }: FieldEdit
   const { updateField, deleteField, addNestedField, updateNestedField, deleteNestedField } = useWorkspaceStore();
   const [isExpanded, setIsExpanded] = useState(true);
 
-  const hasChildren = field.type === 'object' || field.type === 'array';
+  // For arrays, only show children if arrayItemType is 'object'
+  const isObjectArray = field.type === 'array' && field.arrayItemType === 'object';
+  const hasChildren = field.type === 'object' || isObjectArray;
   const canHaveChildren = hasChildren;
 
   const handleUpdate = (updates: Partial<Field>) => {
@@ -120,15 +123,46 @@ export function FieldEditor({ customId, field, fieldPath, depth = 0 }: FieldEdit
               placeholder="/api/data"
               className="w-full h-6 px-1.5 text-xs border border-[var(--border)] rounded bg-[var(--background)]"
             />
-          ) : field.type === 'object' || field.type === 'array' ? (
+          ) : field.type === 'array' ? (
+            <div className="flex items-center gap-1.5">
+              <select
+                value={field.arrayItemType || 'string'}
+                onChange={(e) => handleUpdate({ arrayItemType: e.target.value as ArrayItemType })}
+                className="h-6 px-1 text-xs border border-[var(--border)] rounded bg-[var(--background)]"
+                title="Item type"
+              >
+                {ARRAY_ITEM_TYPES.map((type) => (
+                  <option key={type} value={type}>{type}[]</option>
+                ))}
+              </select>
+              <input
+                type="number"
+                value={field.arrayCount ?? 3}
+                onChange={(e) => handleUpdate({ arrayCount: parseInt(e.target.value) || 1 })}
+                min={1}
+                max={100}
+                className="w-12 h-6 px-1 text-xs border border-[var(--border)] rounded bg-[var(--background)] text-center"
+                title="Number of items"
+              />
+              {field.arrayItemType === 'object' && (
+                <button
+                  onClick={handleAddChild}
+                  className="p-0.5 hover:bg-[var(--hover)] rounded transition-colors"
+                  title="Add object property"
+                >
+                  <Plus className="w-3 h-3 text-[var(--muted)]" />
+                </button>
+              )}
+            </div>
+          ) : field.type === 'object' ? (
             <div className="flex items-center gap-1">
               <span className="text-xs text-[var(--muted)]">
-                {field.children?.length || 0} {field.type === 'array' ? 'items' : 'properties'}
+                {field.children?.length || 0} properties
               </span>
               <button
                 onClick={handleAddChild}
                 className="p-0.5 hover:bg-[var(--hover)] rounded transition-colors"
-                title={`Add ${field.type === 'array' ? 'item' : 'property'}`}
+                title="Add property"
               >
                 <Plus className="w-3 h-3 text-[var(--muted)]" />
               </button>

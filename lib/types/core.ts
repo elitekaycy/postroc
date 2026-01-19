@@ -44,6 +44,8 @@ export type FieldType =
   | 'reference'
   | 'api-fetch';
 
+export type ArrayItemType = 'string' | 'number' | 'boolean' | 'object';
+
 export interface Field {
   id: string;
   key: string;
@@ -55,6 +57,8 @@ export interface Field {
   isExported: boolean;
   description?: string;
   children?: Field[]; // Nested fields for object/array types
+  arrayItemType?: ArrayItemType; // For arrays: what type of items it contains
+  arrayCount?: number; // For arrays: how many items to generate (default 3)
 }
 
 // Export configuration for how a custom should export its data when referenced
