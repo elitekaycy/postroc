@@ -1,7 +1,6 @@
 'use client';
 
 import { useWorkspaceStore } from '@/lib/store/workspace-store';
-import { EnvironmentSwitcher } from './environment-switcher';
 import { useTheme } from '@/lib/hooks/use-theme';
 import { Sun, Moon } from 'lucide-react';
 
@@ -16,7 +15,6 @@ export function Header() {
         {category ? category.name : 'PostRoc'}
       </div>
       <div className="flex items-center gap-2">
-        <EnvironmentSwitcher />
         {mounted && (
           <button
             onClick={toggleTheme}

@@ -28,7 +28,7 @@ export async function fetchFieldData(
   const baseUrl = category ? getBaseUrl(category) : '';
   const url = buildUrl(baseUrl, field.apiEndpoint);
   const cacheKey = category
-    ? `${category.id}-${category.config.activeEnvironment}-${field.apiEndpoint}`
+    ? `${category.id}-${category.config.baseUrl}-${field.apiEndpoint}`
     : `no-category-${field.apiEndpoint}`;
 
   const cached = cache.get(cacheKey);

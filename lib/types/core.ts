@@ -1,10 +1,3 @@
-export type Environment = 'local' | 'staging' | 'production';
-
-export interface EnvironmentConfig {
-  name: Environment;
-  baseUrl: string;
-}
-
 export type AuthType = 'none' | 'bearer' | 'api-key' | 'basic';
 
 export interface AuthConfig {
@@ -35,8 +28,7 @@ export interface CategoryConfig {
   id: string;
   name: string;
   projectId: string;
-  environments: EnvironmentConfig[];
-  activeEnvironment: Environment;
+  baseUrl: string;
   auth: AuthConfig;
   defaultHeaders: Header[];
   createdAt: number;

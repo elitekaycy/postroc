@@ -7,8 +7,6 @@ import type {
   Category,
   Custom,
   CategoryConfig,
-  Environment,
-  EnvironmentConfig,
   AuthConfig,
   Header,
   Field,
@@ -54,10 +52,6 @@ interface WorkspaceStore {
   reorderCategories: (projectId: string, categoryIds: string[]) => void;
   moveCategory: (categoryId: string, targetProjectId: string) => void;
   updateCategoryConfig: (categoryId: string, config: Partial<CategoryConfig>) => void;
-  setActiveEnvironment: (categoryId: string, env: Environment) => void;
-  addEnvironment: (categoryId: string, env: EnvironmentConfig) => void;
-  updateEnvironment: (categoryId: string, envName: Environment, updates: Partial<EnvironmentConfig>) => void;
-  deleteEnvironment: (categoryId: string, envName: Environment) => void;
   updateAuth: (categoryId: string, auth: Partial<AuthConfig>) => void;
   addHeader: (categoryId: string, header: Omit<Header, 'id'>) => void;
   updateHeader: (categoryId: string, headerId: string, updates: Partial<Header>) => void;
@@ -99,12 +93,7 @@ const createDefaultCategoryConfig = (projectId: string, name: string): CategoryC
   id: crypto.randomUUID(),
   name,
   projectId,
-  environments: [
-    { name: 'local', baseUrl: 'http://localhost:3000' },
-    { name: 'staging', baseUrl: '' },
-    { name: 'production', baseUrl: '' },
-  ],
-  activeEnvironment: 'local',
+  baseUrl: 'http://localhost:3000',
   auth: { type: 'none' },
   defaultHeaders: [],
   createdAt: Date.now(),
@@ -342,69 +331,6 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
             const category = project.categories.find((c) => c.id === categoryId);
             if (category) {
               Object.assign(category.config, config);
-              category.config.updatedAt = Date.now();
-              category.updatedAt = Date.now();
-              return;
-            }
-          }
-        }
-      }),
-
-    setActiveEnvironment: (categoryId: string, env: Environment) =>
-      set((state) => {
-        for (const workspace of state.workspaces) {
-          for (const project of workspace.projects) {
-            const category = project.categories.find((c) => c.id === categoryId);
-            if (category) {
-              category.config.activeEnvironment = env;
-              category.config.updatedAt = Date.now();
-              category.updatedAt = Date.now();
-              return;
-            }
-          }
-        }
-      }),
-
-    addEnvironment: (categoryId: string, env: EnvironmentConfig) =>
-      set((state) => {
-        for (const workspace of state.workspaces) {
-          for (const project of workspace.projects) {
-            const category = project.categories.find((c) => c.id === categoryId);
-            if (category) {
-              category.config.environments.push(env);
-              category.config.updatedAt = Date.now();
-              category.updatedAt = Date.now();
-              return;
-            }
-          }
-        }
-      }),
-
-    updateEnvironment: (categoryId: string, envName: Environment, updates: Partial<EnvironmentConfig>) =>
-      set((state) => {
-        for (const workspace of state.workspaces) {
-          for (const project of workspace.projects) {
-            const category = project.categories.find((c) => c.id === categoryId);
-            if (category) {
-              const env = category.config.environments.find((e) => e.name === envName);
-              if (env) {
-                Object.assign(env, updates);
-                category.config.updatedAt = Date.now();
-                category.updatedAt = Date.now();
-              }
-              return;
-            }
-          }
-        }
-      }),
-
-    deleteEnvironment: (categoryId: string, envName: Environment) =>
-      set((state) => {
-        for (const workspace of state.workspaces) {
-          for (const project of workspace.projects) {
-            const category = project.categories.find((c) => c.id === categoryId);
-            if (category) {
-              category.config.environments = category.config.environments.filter((e) => e.name !== envName);
               category.config.updatedAt = Date.now();
               category.updatedAt = Date.now();
               return;
