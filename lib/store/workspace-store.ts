@@ -95,7 +95,11 @@ const createDefaultCategoryConfig = (projectId: string, name: string): CategoryC
   projectId,
   baseUrl: 'http://localhost:3000',
   auth: { type: 'none' },
-  defaultHeaders: [],
+  defaultHeaders: [
+    { id: crypto.randomUUID(), key: 'Content-Type', value: 'application/json', enabled: true },
+    { id: crypto.randomUUID(), key: 'Accept', value: 'application/json', enabled: true },
+    { id: crypto.randomUUID(), key: 'User-Agent', value: 'PostRoc/1.0', enabled: true },
+  ],
   createdAt: Date.now(),
   updatedAt: Date.now(),
 });
