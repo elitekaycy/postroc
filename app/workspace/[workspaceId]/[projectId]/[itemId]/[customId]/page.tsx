@@ -8,7 +8,7 @@ interface CategoryCustomPageProps {
   params: Promise<{
     workspaceId: string;
     projectId: string;
-    categoryId: string;
+    itemId: string; // This is the categoryId
     customId: string;
   }>;
 }
