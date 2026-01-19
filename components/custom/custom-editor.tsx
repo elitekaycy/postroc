@@ -9,7 +9,7 @@ import { ResponseViewer } from '@/components/http/response-viewer';
 import { FieldEditor } from '@/components/custom/field-editor';
 import { DataPreviewPanel } from '@/components/custom/data-preview-panel';
 import { ExportConfigPanel } from '@/components/custom/export-config-panel';
-import { Plus, Play, Download } from 'lucide-react';
+import { Plus, Play, Download, ChevronDown, ChevronRight } from 'lucide-react';
 import type { ExportConfig } from '@/lib/types/core';
 import { useState, useEffect } from 'react';
 
@@ -34,6 +34,7 @@ export function CustomEditor({ customId }: CustomEditorProps) {
   const [response, setResponse] = useState<HttpResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
+  const [responseCollapsed, setResponseCollapsed] = useState(false);
 
   // Reset response when switching customs
   useEffect(() => {
@@ -213,11 +214,26 @@ export function CustomEditor({ customId }: CustomEditorProps) {
           <DataPreviewPanel custom={custom} category={category} />
 
           {response && (
-            <div className="flex-1 min-h-0 overflow-auto">
-              <span className="text-[10px] uppercase tracking-wider text-gray-400">Response</span>
-              <div className="mt-2">
-                <ResponseViewer response={response} isLoading={isLoading} />
-              </div>
+            <div className={`${responseCollapsed ? '' : 'flex-1'} min-h-0 overflow-auto`}>
+              <button
+                onClick={() => setResponseCollapsed(!responseCollapsed)}
+                className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-gray-400 hover:text-gray-300"
+              >
+                {responseCollapsed ? (
+                  <ChevronRight className="w-3 h-3" />
+                ) : (
+                  <ChevronDown className="w-3 h-3" />
+                )}
+                Response
+                <span className={`ml-1 px-1 rounded text-[9px] ${response.status >= 200 && response.status < 300 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                  {response.status}
+                </span>
+              </button>
+              {!responseCollapsed && (
+                <div className="mt-2">
+                  <ResponseViewer response={response} isLoading={isLoading} />
+                </div>
+              )}
             </div>
           )}
         </div>
