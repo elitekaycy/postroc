@@ -6,7 +6,7 @@ import { generatePreviewData, resolveSingleCustom, ResolvedData } from '@/lib/en
 import { exportData, copyToClipboard, ExportFormat } from '@/lib/export/exporters';
 import { SyntaxHighlighter } from '@/components/ui/syntax-highlighter';
 import { Copy, Check } from 'lucide-react';
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 interface DataPreviewPanelProps {
   custom: Custom;
@@ -37,26 +37,36 @@ export function DataPreviewPanel({ custom, category }: DataPreviewPanelProps) {
     return customs;
   }, [workspaces]);
 
-  const regeneratePreview = useCallback(() => {
-    setPreviewData(generatePreviewData(custom));
-    setResolvedData(null);
-  }, [custom]);
-
+  // Auto-resolve when custom or dependencies change
   useEffect(() => {
-    regeneratePreview();
-  }, [regeneratePreview]);
+    let cancelled = false;
 
-  const handleResolve = async () => {
-    setIsResolving(true);
-    try {
-      const result = await resolveSingleCustom(custom, category, allCustoms);
-      setResolvedData(result);
-    } catch {
-      // Silent fail
-    } finally {
-      setIsResolving(false);
-    }
-  };
+    const resolve = async () => {
+      setIsResolving(true);
+      try {
+        const result = await resolveSingleCustom(custom, category, allCustoms);
+        if (!cancelled) {
+          setResolvedData(result);
+        }
+      } catch {
+        if (!cancelled) {
+          // Fallback to preview data on error
+          setPreviewData(generatePreviewData(custom));
+          setResolvedData(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsResolving(false);
+        }
+      }
+    };
+
+    resolve();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [custom, category, allCustoms]);
 
   const currentData = resolvedData ? resolvedData.data : previewData;
   const formattedData = exportData(currentData, { format: exportFormat });
@@ -70,7 +80,12 @@ export function DataPreviewPanel({ custom, category }: DataPreviewPanelProps) {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] uppercase tracking-wider text-gray-400">Preview</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-wider text-gray-400">Preview</span>
+          {isResolving && (
+            <span className="text-[9px] text-[var(--muted)]">resolving...</span>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <select
             value={exportFormat}
@@ -82,13 +97,6 @@ export function DataPreviewPanel({ custom, category }: DataPreviewPanelProps) {
             <option value="form-data">Form Data</option>
             <option value="url-encoded">URL Encoded</option>
           </select>
-          <button
-            onClick={handleResolve}
-            disabled={isResolving}
-            className="h-5 px-1.5 text-[10px] border border-[var(--border)] rounded hover:bg-[var(--hover)] disabled:opacity-40"
-          >
-            {isResolving ? '...' : 'Resolve'}
-          </button>
           <button
             onClick={handleCopy}
             className="p-0.5 hover:bg-[var(--hover)] rounded"
