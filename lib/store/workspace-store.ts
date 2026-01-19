@@ -116,6 +116,9 @@ let lastCreatedId: string | null = null;
 const STORAGE_KEY = 'postroc-workspaces';
 const STORAGE_VERSION = 1;
 
+// Generate short unique ID for naming
+const generateShortId = () => crypto.randomUUID().split('-')[0];
+
 export const useWorkspaceStore = create<WorkspaceStore>()(
   persist(
     immer((set, get) => ({
@@ -128,7 +131,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
 
     createWorkspace: (name?: string) => {
       const id = crypto.randomUUID();
-      const workspaceName = name || `Workspace ${get().workspaces.length + 1}`;
+      const workspaceName = name || `workspace-${generateShortId()}`;
       set((state) => {
         const workspace: Workspace = {
           id,
@@ -167,7 +170,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
       if (!workspace) return null;
 
       const id = crypto.randomUUID();
-      const projectName = name || `Project ${workspace.projects.length + 1}`;
+      const projectName = name || `project-${generateShortId()}`;
       set((state) => {
         const ws = state.workspaces.find((w) => w.id === workspaceId);
         if (ws) {
@@ -233,7 +236,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
       if (!project) return null;
 
       const id = crypto.randomUUID();
-      const categoryName = name || `Category ${project.categories.length + 1}`;
+      const categoryName = name || `category-${generateShortId()}`;
       set((state) => {
         for (const workspace of state.workspaces) {
           const proj = workspace.projects.find((p) => p.id === projectId);
@@ -491,11 +494,8 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
       }
       if (!project) return null;
 
-      const existingCount = categoryId && category
-        ? category.customs.length
-        : project.customs.length;
       const id = crypto.randomUUID();
-      const customName = name || `Custom ${existingCount + 1}`;
+      const customName = name || `custom-${generateShortId()}`;
 
       set((state) => {
         for (const workspace of state.workspaces) {
@@ -1169,6 +1169,12 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
         activeCategoryId: state.activeCategoryId,
         activeCustomId: state.activeCustomId,
       }),
+      onRehydrateStorage: () => (state) => {
+        // Create default workspace if none exists after loading from storage
+        if (state && state.workspaces.length === 0) {
+          state.createWorkspace();
+        }
+      },
     }
   )
 );
