@@ -1,56 +1,48 @@
-i noticed i have an issue wit the array type, its harder to create an array type of just particlular fields, what i noticed is if i add two or more items, they all default to object types key value, but i want the option to have like an arrya of multiple datatypes and etc.
-can we fix the array parsing...
+COMPLETED:
+- workspace naming uses unique id (workspace-{shortId})
+- rename functionality and delete functionality in sidebar menus
+- drag and rearrange functionality with visual drop zones
+- array type supports comma-separated default values
+- improved visibility of action buttons (plus signs)
+- custom scrollbar design (6px, minimal)
+- Dockerfile created (multi-stage build with standalone output)
+- CLI tool plan created (see CLI_PLAN.md) - file-based approach
+- Export/Import feature (sidebar > More > Export/Import)
+  - Export workspace, project, or category as .postroc.json
+  - Import with modes: as-new, merge, or replace
+  - Sensitive data stripping option
+- CLI Sync feature (sidebar footer > "Sync to CLI" button)
+  - One-click sync all workspaces to local folder
+  - Uses File System Access API for direct filesystem writes
+  - First time: prompts to select folder (e.g. ~/.config/postroc/data/)
+  - Subsequent syncs: writes directly to saved location
+  - Directory handle persisted in IndexedDB
 
 
-in the category, remove staging and production and local environment optiuons, we just have one environment and we can chanage the url for that category manually on the url edit page, no environment switchong,
+TODO:
+- CI/CD GitHub pipeline to build Docker image
+- Pipeline to pull from Docker and deploy to server
+- Implement CLI tool (separate project - postroc-cli)
+- (Optional) Add lightweight backend for collaboration features
 
 
-fix the sidbar. read sidebar.md at /docs and lets improve the ui ux, maybe add shadcn sidebar and revamp.. maintain all functionalities
+NOTES:
+- domain: postroc.scalestash.com (landing) / app.postroc.scalestash.com (app)
+- contact: contact@scalestash.com
+- CLI plan: CLI_PLAN.md (updated to file-based, no database required)
+- Current data storage: localStorage (client-side only)
+- CLI approach: Sync to CLI button writes to ~/.config/postroc/data/
+- For team collaboration/sync, can add Supabase/Firebase later (optional)
 
 
-workspace should be created by default if no workspace found in localstorage or etc
-and naming  i would prefare 
-worksapce-{uniqueId}
-project-{uniqueId}
-etc category and custom same format for defaults instead of Workspace-1 or Project-1 etc  NO CAPS
+STANDALONE PROJECTS:
+- postroc-cli (../postroc-cli/)
+  - CLI tool for generating mock data from PostRoc configs
+  - Commands: generate, list, import, config
+  - Reads from ~/.config/postroc/data/*.postroc.json
+  - npm install -g postroc-cli
 
-lets now move the sidebar items to route based so that i can add landing page aswell
-
-http://localhost:3000/ --landing page (dont create the landing page yet)
-http://localhost:3000/workspace/workspace-laksjhdfg --workspace
-http://localhost:3000/workspace/workspace-laksjhdfg/project-ekwqwjrf --project
-http://localhost:3000/workspace/workspace-laksjhdfg/project-ekwqwjrf --project/custom-qwkjsqwe   -- custom
-http://localhost:3000/workspace/workspace-laksjhdfg/project-ekwqwjrf --project/category-ksjdfgla   -- category
-http://localhost:3000/workspace/workspace-laksjhdfg/project-ekwqwjrf --project/category-ksjdfgla/custom-aklsjgt   -- custom in category
-
-the above should help us improve persistens and storage
-
-ui fix. use fullpaths in the breadcrumb aswell
-
-
-also can we look at some default headers to add automatically that would be awesome., think of the default ones postman add to requests or insomnia add to request, to be able to run locally and bypass some isues
-
-
-the RESPONSE section in the custom should be collapsible
-
-
-lets work on the design for the scrolling for the page, custom scrolling design, smaller etc
-
-
-later below...
-
-name postroc.scalestash.com
-lets work on the landig page.
-  - navigatgion plus cta (open workspace)
-  - hero page - cta plus we show a video of how it works
-  - features (import, export workspace etc, cli etc)
-  - steps to install the cli
-  - faq, email, foooter
-  
-
-lets create a docker file, and lets create a ci/cd githbut pipeline to build to docker
-
-have another pipeline to pull from docker and run on my server,
-
-
-
+- postroc-landing (../postroc-landing/)
+  - Marketing landing page
+  - Static Next.js site (output: export)
+  - Deploy to postroc.scalestash.com

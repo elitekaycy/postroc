@@ -2,25 +2,45 @@ import { faker } from '@faker-js/faker';
 import type { Field, FieldType, ArrayItemType } from '@/lib/types/core';
 
 export function generateFieldValue(field: Field): unknown {
-  if (field.value !== undefined && field.value !== null && field.value !== '') {
-    return field.value;
-  }
-
-  // Handle object type with children
-  if (field.type === 'object' && field.children && field.children.length > 0) {
-    const obj: Record<string, unknown> = {};
-    for (const child of field.children) {
-      if (child.isExported) {
-        obj[child.key] = generateFieldValue(child);
-      }
-    }
-    return obj;
-  }
-
-  // Handle array type with new arrayItemType property
+  // Handle array type
   if (field.type === 'array') {
-    const count = field.arrayCount ?? 3;
     const itemType = field.arrayItemType || 'string';
+
+    // Handle mixed arrays - each child is one item in the array
+    if (itemType === 'mixed') {
+      if (field.children && field.children.length > 0) {
+        return field.children
+          .filter((child) => child.isExported)
+          .map((child) => generateFieldValue(child));
+      }
+      return [];
+    }
+
+    // If value is provided, parse it as comma-separated values (for primitive types)
+    if (field.value !== undefined && field.value !== null && field.value !== '') {
+      const valueStr = String(field.value);
+      const parts = valueStr.split(',').map((s) => s.trim()).filter((s) => s !== '');
+
+      return parts.map((part) => {
+        switch (itemType) {
+          case 'number':
+            return Number(part) || 0;
+          case 'boolean':
+            return part.toLowerCase() === 'true' || part === '1';
+          case 'object':
+            try {
+              return JSON.parse(part);
+            } catch {
+              return {};
+            }
+          default:
+            return part;
+        }
+      });
+    }
+
+    // No default value, generate random values
+    const count = field.arrayCount ?? 3;
     const items: unknown[] = [];
 
     for (let i = 0; i < count; i++) {
@@ -39,6 +59,22 @@ export function generateFieldValue(field: Field): unknown {
       }
     }
     return items;
+  }
+
+  // For non-array types, use value if provided
+  if (field.value !== undefined && field.value !== null && field.value !== '') {
+    return field.value;
+  }
+
+  // Handle object type with children
+  if (field.type === 'object' && field.children && field.children.length > 0) {
+    const obj: Record<string, unknown> = {};
+    for (const child of field.children) {
+      if (child.isExported) {
+        obj[child.key] = generateFieldValue(child);
+      }
+    }
+    return obj;
   }
 
   return generateValueForType(field.type, field.key);

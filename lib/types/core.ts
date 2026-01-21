@@ -44,7 +44,8 @@ export type FieldType =
   | 'reference'
   | 'api-fetch';
 
-export type ArrayItemType = 'string' | 'number' | 'boolean' | 'object';
+// 'mixed' allows each array item to be defined individually with different types
+export type ArrayItemType = 'string' | 'number' | 'boolean' | 'object' | 'mixed';
 
 export interface Field {
   id: string;

@@ -7,7 +7,7 @@ import { Trash2, Plus, ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 
 const FIELD_TYPES: FieldType[] = ['string', 'number', 'boolean', 'array', 'object', 'reference', 'api-fetch'];
-const ARRAY_ITEM_TYPES: ArrayItemType[] = ['string', 'number', 'boolean', 'object'];
+const ARRAY_ITEM_TYPES: ArrayItemType[] = ['string', 'number', 'boolean', 'object', 'mixed'];
 
 interface FieldEditorProps {
   customId: string;
@@ -20,9 +20,10 @@ export function FieldEditor({ customId, field, fieldPath, depth = 0 }: FieldEdit
   const { updateField, deleteField, addNestedField, updateNestedField, deleteNestedField } = useWorkspaceStore();
   const [isExpanded, setIsExpanded] = useState(true);
 
-  // For arrays, only show children if arrayItemType is 'object'
+  // For arrays, show children if arrayItemType is 'object' or 'mixed'
   const isObjectArray = field.type === 'array' && field.arrayItemType === 'object';
-  const hasChildren = field.type === 'object' || isObjectArray;
+  const isMixedArray = field.type === 'array' && field.arrayItemType === 'mixed';
+  const hasChildren = field.type === 'object' || isObjectArray || isMixedArray;
   const canHaveChildren = hasChildren;
 
   const handleUpdate = (updates: Partial<Field>) => {
@@ -42,8 +43,19 @@ export function FieldEditor({ customId, field, fieldPath, depth = 0 }: FieldEdit
   };
 
   const handleAddChild = () => {
+    const childIndex = (field.children?.length || 0) + 1;
+    let childKey = `field_${childIndex}`;
+
+    // For mixed arrays, use index-based naming since each item is independent
+    if (field.type === 'array' && field.arrayItemType === 'mixed') {
+      childKey = `[${field.children?.length || 0}]`;
+    } else if (field.type === 'array' && field.arrayItemType === 'object') {
+      // For object arrays, the key represents a property name of the object
+      childKey = `prop_${childIndex}`;
+    }
+
     const childField: Omit<Field, 'id'> = {
-      key: field.type === 'array' ? 'item' : `field_${(field.children?.length || 0) + 1}`,
+      key: childKey,
       type: 'string',
       isExported: true,
     };
@@ -124,34 +136,57 @@ export function FieldEditor({ customId, field, fieldPath, depth = 0 }: FieldEdit
               className="w-full h-6 px-1.5 text-xs border border-[var(--border)] rounded bg-[var(--background)]"
             />
           ) : field.type === 'array' ? (
-            <div className="flex items-center gap-1.5">
-              <select
-                value={field.arrayItemType || 'string'}
-                onChange={(e) => handleUpdate({ arrayItemType: e.target.value as ArrayItemType })}
-                className="h-6 px-1 text-xs border border-[var(--border)] rounded bg-[var(--background)]"
-                title="Item type"
-              >
-                {ARRAY_ITEM_TYPES.map((type) => (
-                  <option key={type} value={type}>{type}[]</option>
-                ))}
-              </select>
-              <input
-                type="number"
-                value={field.arrayCount ?? 3}
-                onChange={(e) => handleUpdate({ arrayCount: parseInt(e.target.value) || 1 })}
-                min={1}
-                max={100}
-                className="w-12 h-6 px-1 text-xs border border-[var(--border)] rounded bg-[var(--background)] text-center"
-                title="Number of items"
-              />
-              {field.arrayItemType === 'object' && (
-                <button
-                  onClick={handleAddChild}
-                  className="p-0.5 hover:bg-[var(--hover)] rounded transition-colors"
-                  title="Add object property"
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={field.arrayItemType || 'string'}
+                  onChange={(e) => handleUpdate({ arrayItemType: e.target.value as ArrayItemType })}
+                  className="h-6 px-1 text-xs border border-[var(--border)] rounded bg-[var(--background)]"
+                  title="Item type"
                 >
-                  <Plus className="w-3 h-3 text-[var(--muted)]" />
-                </button>
+                  {ARRAY_ITEM_TYPES.map((type) => (
+                    <option key={type} value={type}>{type === 'mixed' ? 'mixed[]' : `${type}[]`}</option>
+                  ))}
+                </select>
+                {/* Show count for object arrays (mixed uses children count) */}
+                {field.arrayItemType !== 'mixed' && (
+                  <input
+                    type="number"
+                    value={field.arrayCount ?? 3}
+                    onChange={(e) => handleUpdate({ arrayCount: parseInt(e.target.value) || 1 })}
+                    min={1}
+                    max={100}
+                    className="w-12 h-6 px-1 text-xs border border-[var(--border)] rounded bg-[var(--background)] text-center"
+                    title="Number of items to generate"
+                  />
+                )}
+                {/* Show add button for object and mixed arrays */}
+                {(field.arrayItemType === 'object' || field.arrayItemType === 'mixed') && (
+                  <button
+                    onClick={handleAddChild}
+                    className="group/addbtn p-1 hover:bg-[var(--hover)] rounded transition-colors border border-[var(--border)] bg-[var(--background)]"
+                    title={field.arrayItemType === 'mixed' ? 'Add array item' : 'Add object property'}
+                  >
+                    <Plus className="w-3.5 h-3.5 text-[var(--foreground)] opacity-70 group-hover/addbtn:opacity-100" />
+                  </button>
+                )}
+                {/* Show item count for mixed arrays */}
+                {field.arrayItemType === 'mixed' && (
+                  <span className="text-xs text-[var(--muted)]">
+                    {field.children?.length || 0} items
+                  </span>
+                )}
+              </div>
+              {/* Only show default values input for primitive types */}
+              {field.arrayItemType !== 'object' && field.arrayItemType !== 'mixed' && (
+                <input
+                  type="text"
+                  value={String(field.value ?? '')}
+                  onChange={(e) => handleUpdate({ value: e.target.value })}
+                  placeholder={`Defaults: ${field.arrayItemType === 'number' ? '1,2,3' : field.arrayItemType === 'boolean' ? 'true,false' : 'a,b,c'}`}
+                  className="w-full h-6 px-1.5 text-xs border border-[var(--border)] rounded bg-[var(--background)]"
+                  title="Comma-separated default values (leave empty for random)"
+                />
               )}
             </div>
           ) : field.type === 'object' ? (
@@ -161,10 +196,10 @@ export function FieldEditor({ customId, field, fieldPath, depth = 0 }: FieldEdit
               </span>
               <button
                 onClick={handleAddChild}
-                className="p-0.5 hover:bg-[var(--hover)] rounded transition-colors"
+                className="group/addbtn p-1 hover:bg-[var(--hover)] rounded transition-colors border border-[var(--border)] bg-[var(--background)]"
                 title="Add property"
               >
-                <Plus className="w-3 h-3 text-[var(--muted)]" />
+                <Plus className="w-3.5 h-3.5 text-[var(--foreground)] opacity-70 group-hover/addbtn:opacity-100" />
               </button>
             </div>
           ) : (

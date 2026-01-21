@@ -33,7 +33,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  ChevronDown,
   ChevronRight,
   Folder,
   Box,
@@ -45,10 +44,593 @@ import {
   Upload,
   Trash,
   ChevronsUpDown,
+  Pencil,
+  GripVertical,
+  RefreshCw,
+  FolderSync,
+  Check,
+  AlertCircle,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ExportDialog } from '@/components/dialogs/export-dialog';
 import { ImportDialog } from '@/components/dialogs/import-dialog';
+import {
+  isFileSystemAccessSupported,
+  syncAllWorkspacesToCLI,
+  hasCLISyncConfigured,
+  getSyncDirectoryName,
+  clearDirectoryHandle,
+} from '@/lib/cli-sync';
+import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragStartEvent,
+  DragEndEvent,
+  DragOverEvent,
+  useDroppable,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+// Inline editable text component
+function EditableText({
+  value,
+  isEditing,
+  onSave,
+  onCancel,
+  className = '',
+}: {
+  value: string;
+  isEditing: boolean;
+  onSave: (newValue: string) => void;
+  onCancel: () => void;
+  className?: string;
+}) {
+  const [editValue, setEditValue] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  useEffect(() => {
+    setEditValue(value);
+  }, [value]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (editValue.trim()) {
+        onSave(editValue.trim());
+      } else {
+        onCancel();
+      }
+    } else if (e.key === 'Escape') {
+      setEditValue(value);
+      onCancel();
+    }
+  };
+
+  const handleBlur = () => {
+    if (editValue.trim() && editValue !== value) {
+      onSave(editValue.trim());
+    } else {
+      setEditValue(value);
+      onCancel();
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <input
+        ref={inputRef}
+        type="text"
+        value={editValue}
+        onChange={(e) => setEditValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={handleBlur}
+        onClick={(e) => e.stopPropagation()}
+        className={`bg-transparent border border-ring rounded px-1 py-0 text-sm outline-none w-full min-w-0 ${className}`}
+      />
+    );
+  }
+
+  return <span className={`truncate ${className}`}>{value}</span>;
+}
+
+// Drag handle component
+function DragHandle({ listeners, attributes }: { listeners?: ReturnType<typeof useSortable>['listeners']; attributes?: ReturnType<typeof useSortable>['attributes'] }) {
+  return (
+    <button
+      className="cursor-grab active:cursor-grabbing p-0.5 -ml-1 opacity-0 group-hover/item:opacity-50 hover:!opacity-100 transition-opacity"
+      {...listeners}
+      {...attributes}
+    >
+      <GripVertical className="h-3 w-3" />
+    </button>
+  );
+}
+
+// Type for drag data
+type DragItem = {
+  type: 'project' | 'category' | 'custom';
+  id: string;
+  parentId?: string; // projectId for categories/customs, categoryId for category customs
+  isInCategory?: boolean;
+};
+
+// Import types
+import type { Project, Category, Custom } from '@/lib/types/core';
+
+// Sortable Project Item
+function SortableProjectItem({
+  project,
+  isActive,
+  isEditing,
+  activeCustomId,
+  activeCategoryId,
+  editingId,
+  onNavigate,
+  onNavigateToCustom,
+  onNavigateToCategory,
+  onEdit,
+  onSaveName,
+  onCancelEdit,
+  onCreateCustom,
+  onCreateCategory,
+  onDeleteProject,
+  onDeleteCategory,
+  onDeleteCustom,
+  onEditCategory,
+  onSaveCategoryName,
+  onEditCustom,
+  onSaveCustomName,
+  overId,
+  activeItem,
+  onMoveToProjectLevel,
+}: {
+  project: Project;
+  isActive: boolean;
+  isEditing: boolean;
+  activeCustomId: string | null;
+  activeCategoryId: string | null;
+  editingId: string | null;
+  onNavigate: () => void;
+  onNavigateToCustom: (id: string) => void;
+  onNavigateToCategory: (id: string) => void;
+  onEdit: () => void;
+  onSaveName: (name: string) => void;
+  onCancelEdit: () => void;
+  onCreateCustom: (categoryId?: string) => void;
+  onCreateCategory: () => void;
+  onDeleteProject: () => void;
+  onDeleteCategory: (id: string) => void;
+  onDeleteCustom: (id: string) => void;
+  onEditCategory: (id: string) => void;
+  onSaveCategoryName: (id: string, name: string) => void;
+  onEditCustom: (id: string) => void;
+  onSaveCustomName: (id: string, name: string) => void;
+  overId: string | null;
+  activeItem: DragItem | null;
+  onMoveToProjectLevel: (customId: string) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: project.id,
+    data: { type: 'project', id: project.id } as DragItem,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  // Droppable zone for moving customs to project level
+  const { setNodeRef: setDroppableRef, isOver: isOverProjectLevel } = useDroppable({
+    id: `project-drop-${project.id}`,
+    data: { type: 'project-drop', projectId: project.id },
+  });
+
+  // Show drop zone when dragging a custom that's in a category
+  const showProjectDropZone = activeItem?.type === 'custom' && activeItem.isInCategory;
+
+  return (
+    <Collapsible defaultOpen className="group/collapsible">
+      <SidebarMenuItem ref={setNodeRef} style={style} className="group/item">
+        {isEditing ? (
+          <div className="flex items-center gap-2 px-2 py-1.5">
+            <Folder className="h-4 w-4 shrink-0" />
+            <EditableText
+              value={project.name}
+              isEditing={true}
+              onSave={onSaveName}
+              onCancel={onCancelEdit}
+            />
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center">
+              <DragHandle listeners={listeners} attributes={attributes} />
+              <CollapsibleTrigger asChild>
+                <SidebarMenuButton isActive={isActive} onClick={onNavigate} className="flex-1">
+                  <Folder className="h-4 w-4" />
+                  <span className="truncate">{project.name}</span>
+                  <ChevronRight className="ml-auto h-4 w-4 shrink-0 transition-transform group-data-[state=open]/collapsible:rotate-90" />
+                </SidebarMenuButton>
+              </CollapsibleTrigger>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuAction showOnHover>
+                  <MoreHorizontal className="h-4 w-4" />
+                </SidebarMenuAction>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="right" align="start">
+                <DropdownMenuItem onClick={onEdit}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Rename
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => onCreateCustom()}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Custom
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onCreateCategory}>
+                  <Box className="mr-2 h-4 w-4" />
+                  Add Category
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onDeleteProject} className="text-destructive">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        )}
+        <CollapsibleContent>
+          <SidebarMenuSub>
+            {/* Drop zone for moving customs to project level */}
+            {showProjectDropZone && (
+              <div
+                ref={setDroppableRef}
+                className={`mx-2 my-1 p-2 border-2 border-dashed rounded-md text-xs text-center transition-colors ${
+                  isOverProjectLevel
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-muted-foreground/30 text-muted-foreground'
+                }`}
+              >
+                Drop here to move to project level
+              </div>
+            )}
+            {/* Project-level customs */}
+            <SortableContext
+              items={project.customs.map((c) => c.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {project.customs.map((custom) => (
+                <SortableCustomItem
+                  key={custom.id}
+                  custom={custom}
+                  projectId={project.id}
+                  isActive={activeCustomId === custom.id}
+                  isEditing={editingId === custom.id}
+                  onNavigate={() => onNavigateToCustom(custom.id)}
+                  onEdit={() => onEditCustom(custom.id)}
+                  onSaveName={(name) => onSaveCustomName(custom.id, name)}
+                  onCancelEdit={onCancelEdit}
+                  onDelete={() => onDeleteCustom(custom.id)}
+                  isInCategory={false}
+                  isDropTarget={overId === custom.id}
+                />
+              ))}
+            </SortableContext>
+            {/* Categories */}
+            <SortableContext
+              items={project.categories.map((c) => c.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {project.categories.map((category) => (
+                <SortableCategoryItem
+                  key={category.id}
+                  category={category}
+                  projectId={project.id}
+                  isActive={activeCategoryId === category.id}
+                  isEditing={editingId === category.id}
+                  activeCustomId={activeCustomId}
+                  editingId={editingId}
+                  onNavigate={() => onNavigateToCategory(category.id)}
+                  onNavigateToCustom={onNavigateToCustom}
+                  onEdit={() => onEditCategory(category.id)}
+                  onSaveName={(name) => onSaveCategoryName(category.id, name)}
+                  onCancelEdit={onCancelEdit}
+                  onCreateCustom={() => onCreateCustom(category.id)}
+                  onDelete={() => onDeleteCategory(category.id)}
+                  onEditCustom={onEditCustom}
+                  onSaveCustomName={onSaveCustomName}
+                  onDeleteCustom={onDeleteCustom}
+                  overId={overId}
+                />
+              ))}
+            </SortableContext>
+          </SidebarMenuSub>
+        </CollapsibleContent>
+      </SidebarMenuItem>
+    </Collapsible>
+  );
+}
+
+// Sortable Category Item
+function SortableCategoryItem({
+  category,
+  projectId,
+  isActive,
+  isEditing,
+  activeCustomId,
+  editingId,
+  onNavigate,
+  onNavigateToCustom,
+  onEdit,
+  onSaveName,
+  onCancelEdit,
+  onCreateCustom,
+  onDelete,
+  onEditCustom,
+  onSaveCustomName,
+  onDeleteCustom,
+  overId,
+}: {
+  category: Category;
+  projectId: string;
+  isActive: boolean;
+  isEditing: boolean;
+  activeCustomId: string | null;
+  editingId: string | null;
+  onNavigate: () => void;
+  onNavigateToCustom: (id: string) => void;
+  onEdit: () => void;
+  onSaveName: (name: string) => void;
+  onCancelEdit: () => void;
+  onCreateCustom: () => void;
+  onDelete: () => void;
+  onEditCustom: (id: string) => void;
+  onSaveCustomName: (id: string, name: string) => void;
+  onDeleteCustom: (id: string) => void;
+  overId: string | null;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: category.id,
+    data: { type: 'category', id: category.id, parentId: projectId } as DragItem,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const isDropTarget = overId === category.id;
+
+  return (
+    <Collapsible defaultOpen className="group/category">
+      <SidebarMenuSubItem
+        ref={setNodeRef}
+        style={style}
+        className={`group/item ${isDropTarget ? 'ring-2 ring-primary ring-offset-1 rounded' : ''}`}
+      >
+        {isEditing ? (
+          <div className="flex items-center gap-2 px-2 py-1">
+            <Box className="h-4 w-4 shrink-0" />
+            <EditableText
+              value={category.name}
+              isEditing={true}
+              onSave={onSaveName}
+              onCancel={onCancelEdit}
+            />
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center pr-6">
+              <DragHandle listeners={listeners} attributes={attributes} />
+              <CollapsibleTrigger asChild>
+                <SidebarMenuSubButton isActive={isActive} onClick={onNavigate} className="flex-1">
+                  <Box className="h-4 w-4" />
+                  <span className="truncate">{category.name}</span>
+                  <ChevronRight className="ml-auto h-3 w-3 shrink-0 transition-transform group-data-[state=open]/category:rotate-90" />
+                </SidebarMenuSubButton>
+              </CollapsibleTrigger>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuAction showOnHover>
+                  <MoreHorizontal className="h-3 w-3" />
+                </SidebarMenuAction>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="right" align="start">
+                <DropdownMenuItem onClick={onEdit}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onCreateCustom}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Custom
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onDelete} className="text-destructive">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        )}
+        <CollapsibleContent>
+          <SidebarMenuSub className="ml-4 border-l-0">
+            <SortableContext
+              items={category.customs.map((c) => c.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {category.customs.map((custom) => (
+                <SortableCustomItem
+                  key={custom.id}
+                  custom={custom}
+                  projectId={projectId}
+                  categoryId={category.id}
+                  isActive={activeCustomId === custom.id}
+                  isEditing={editingId === custom.id}
+                  onNavigate={() => onNavigateToCustom(custom.id)}
+                  onEdit={() => onEditCustom(custom.id)}
+                  onSaveName={(name) => onSaveCustomName(custom.id, name)}
+                  onCancelEdit={onCancelEdit}
+                  onDelete={() => onDeleteCustom(custom.id)}
+                  isInCategory={true}
+                  isDropTarget={overId === custom.id}
+                />
+              ))}
+            </SortableContext>
+            <SidebarMenuSubItem>
+              <SidebarMenuSubButton
+                onClick={onCreateCustom}
+                size="sm"
+                className="text-muted-foreground"
+              >
+                <Plus className="h-3 w-3" />
+                <span>Add Custom</span>
+              </SidebarMenuSubButton>
+            </SidebarMenuSubItem>
+          </SidebarMenuSub>
+        </CollapsibleContent>
+      </SidebarMenuSubItem>
+    </Collapsible>
+  );
+}
+
+// Sortable Custom Item
+function SortableCustomItem({
+  custom,
+  projectId,
+  categoryId,
+  isActive,
+  isEditing,
+  onNavigate,
+  onEdit,
+  onSaveName,
+  onCancelEdit,
+  onDelete,
+  isInCategory,
+  isDropTarget,
+}: {
+  custom: Custom;
+  projectId: string;
+  categoryId?: string;
+  isActive: boolean;
+  isEditing: boolean;
+  onNavigate: () => void;
+  onEdit: () => void;
+  onSaveName: (name: string) => void;
+  onCancelEdit: () => void;
+  onDelete: () => void;
+  isInCategory: boolean;
+  isDropTarget: boolean;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: custom.id,
+    data: {
+      type: 'custom',
+      id: custom.id,
+      parentId: isInCategory ? categoryId : projectId,
+      isInCategory,
+    } as DragItem,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <SidebarMenuSubItem ref={setNodeRef} style={style} className="group/item">
+      {isEditing ? (
+        <div className="flex items-center gap-2 px-2 py-1">
+          <FileCode className={isInCategory ? 'h-3 w-3 shrink-0' : 'h-4 w-4 shrink-0'} />
+          <EditableText
+            value={custom.name}
+            isEditing={true}
+            onSave={onSaveName}
+            onCancel={onCancelEdit}
+          />
+        </div>
+      ) : (
+        <DropdownMenu>
+          <div className="flex items-center">
+            <DragHandle listeners={listeners} attributes={attributes} />
+            <SidebarMenuSubButton
+              isActive={isActive}
+              onClick={onNavigate}
+              size={isInCategory ? 'sm' : undefined}
+              className="flex-1"
+            >
+              <FileCode className={isInCategory ? 'h-3 w-3' : 'h-4 w-4'} />
+              <span className="truncate">{custom.name}</span>
+            </SidebarMenuSubButton>
+          </div>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuAction showOnHover className="right-1">
+              <MoreHorizontal className="h-3 w-3" />
+            </SidebarMenuAction>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="right" align="start">
+            <DropdownMenuItem onClick={onEdit}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Rename
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onDelete} className="text-destructive">
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </SidebarMenuSubItem>
+  );
+}
 
 export function AppSidebar() {
   const {
@@ -59,6 +641,7 @@ export function AppSidebar() {
     activeCustomId,
     editingId,
     setEditingId,
+    setActiveWorkspace,
     createWorkspace,
     createProject,
     createCategory,
@@ -67,18 +650,215 @@ export function AppSidebar() {
     updateProject,
     updateCategory,
     updateCustom,
+    deleteWorkspace,
     deleteProject,
     deleteCategory,
     deleteCustom,
     clearAllData,
+    reorderProjects,
+    reorderCategories,
+    reorderCustoms,
+    moveCustom,
   } = useWorkspaceStore();
 
   const { navigateToProject, navigateToCategory, navigateToCustom } = useNavigation();
 
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [activeItem, setActiveItem] = useState<DragItem | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+
+  // CLI Sync state
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [syncDirName, setSyncDirName] = useState<string | null>(null);
+  const [fsApiSupported, setFsApiSupported] = useState(true);
+
+  // Check CLI sync configuration on mount
+  useEffect(() => {
+    setFsApiSupported(isFileSystemAccessSupported());
+
+    const checkSyncConfig = async () => {
+      const dirName = await getSyncDirectoryName();
+      setSyncDirName(dirName);
+    };
+    checkSyncConfig();
+  }, []);
+
+  const { exportWorkspaceToJSON } = useWorkspaceStore();
+
+  const handleSyncToCLI = async () => {
+    if (!fsApiSupported) {
+      setSyncStatus('error');
+      setSyncMessage('Browser does not support filesystem access');
+      return;
+    }
+
+    setIsSyncing(true);
+    setSyncStatus('idle');
+    setSyncMessage(null);
+
+    try {
+      // Prepare all workspaces for sync
+      const workspacesData = workspaces.map((ws) => ({
+        id: ws.id,
+        name: ws.name,
+        json: exportWorkspaceToJSON(ws.id, false) || '',
+      })).filter((ws) => ws.json);
+
+      const result = await syncAllWorkspacesToCLI(workspacesData);
+
+      if (result.success) {
+        setSyncStatus('success');
+        setSyncMessage(`Synced ${result.synced} workspace(s)`);
+        // Refresh directory name
+        const dirName = await getSyncDirectoryName();
+        setSyncDirName(dirName);
+      } else {
+        setSyncStatus('error');
+        setSyncMessage(result.error || 'Sync failed');
+      }
+    } catch (err) {
+      setSyncStatus('error');
+      setSyncMessage((err as Error).message);
+    } finally {
+      setIsSyncing(false);
+      // Clear status after 3 seconds
+      setTimeout(() => {
+        setSyncStatus('idle');
+        setSyncMessage(null);
+      }, 3000);
+    }
+  };
+
+  const handleClearSyncDir = async () => {
+    await clearDirectoryHandle();
+    setSyncDirName(null);
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    setActiveItem(active.data.current as DragItem);
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+    setOverId(over?.id as string || null);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveItem(null);
+    setOverId(null);
+
+    if (!over || active.id === over.id) return;
+
+    const activeData = active.data.current as DragItem;
+    const overData = over.data.current as DragItem | undefined;
+
+    if (activeData.type === 'project' && activeWorkspaceId) {
+      // Reorder projects
+      const projects = activeWorkspace?.projects || [];
+      const oldIndex = projects.findIndex((p) => p.id === active.id);
+      const newIndex = projects.findIndex((p) => p.id === over.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newOrder = arrayMove(projects.map((p) => p.id), oldIndex, newIndex);
+        reorderProjects(activeWorkspaceId, newOrder);
+      }
+    } else if (activeData.type === 'category' && activeData.parentId) {
+      // Reorder categories within project
+      const project = activeWorkspace?.projects.find((p) => p.id === activeData.parentId);
+      if (project) {
+        const oldIndex = project.categories.findIndex((c) => c.id === active.id);
+        const newIndex = project.categories.findIndex((c) => c.id === over.id);
+        if (oldIndex !== -1 && newIndex !== -1) {
+          const newOrder = arrayMove(project.categories.map((c) => c.id), oldIndex, newIndex);
+          reorderCategories(activeData.parentId, newOrder);
+        }
+      }
+    } else if (activeData.type === 'custom') {
+      // Find the project that contains the custom being dragged
+      let sourceProjectId: string | null = null;
+
+      if (activeData.isInCategory && activeData.parentId) {
+        // Find project containing this category
+        const project = activeWorkspace?.projects.find((p) =>
+          p.categories.some((c) => c.id === activeData.parentId)
+        );
+        sourceProjectId = project?.id || null;
+      } else {
+        sourceProjectId = activeData.parentId || null;
+      }
+
+      if (!sourceProjectId) return;
+
+      // Handle dropping on project-drop zone - move custom to project level
+      const overDataAny = over.data.current as { type?: string; projectId?: string } | undefined;
+      if (overDataAny?.type === 'project-drop' && overDataAny.projectId) {
+        moveCustom(activeData.id as string, overDataAny.projectId, undefined);
+        return;
+      }
+
+      // Handle dropping on a category - move custom into that category
+      if (overData?.type === 'category') {
+        moveCustom(activeData.id as string, sourceProjectId, over.id as string);
+      }
+      // Handle dropping on a project-level custom - move to project level or reorder
+      else if (overData?.type === 'custom' && !overData.isInCategory) {
+        // Target is a project-level custom
+        if (activeData.isInCategory) {
+          // Moving from category to project level (no category)
+          moveCustom(activeData.id as string, sourceProjectId, undefined);
+        } else if (activeData.parentId && activeData.parentId === overData.parentId) {
+          // Reordering within same project level
+          const project = activeWorkspace?.projects.find((p) => p.id === activeData.parentId);
+          if (project) {
+            const oldIndex = project.customs.findIndex((c) => c.id === active.id);
+            const newIndex = project.customs.findIndex((c) => c.id === over.id);
+            if (oldIndex !== -1 && newIndex !== -1) {
+              const newOrder = arrayMove(project.customs.map((c) => c.id), oldIndex, newIndex);
+              reorderCustoms(activeData.parentId, newOrder, false);
+            }
+          }
+        }
+      }
+      // Handle dropping on a category-level custom - move to that category or reorder
+      else if (overData?.type === 'custom' && overData.isInCategory && overData.parentId) {
+        if (activeData.parentId === overData.parentId && activeData.isInCategory) {
+          // Reordering within same category
+          const project = activeWorkspace?.projects.find((p) =>
+            p.categories.some((c) => c.id === activeData.parentId)
+          );
+          const category = project?.categories.find((c) => c.id === activeData.parentId);
+          if (category) {
+            const oldIndex = category.customs.findIndex((c) => c.id === active.id);
+            const newIndex = category.customs.findIndex((c) => c.id === over.id);
+            if (oldIndex !== -1 && newIndex !== -1) {
+              const newOrder = arrayMove(category.customs.map((c) => c.id), oldIndex, newIndex);
+              reorderCustoms(activeData.parentId, newOrder, true);
+            }
+          }
+        } else {
+          // Moving to a different category
+          moveCustom(activeData.id as string, sourceProjectId, overData.parentId);
+        }
+      }
+    }
+  };
 
   if (workspaces.length === 0) {
     return (
@@ -108,37 +888,78 @@ export function AppSidebar() {
   }
 
   return (
-    <>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+    >
       <Sidebar>
         <SidebarHeader className="border-b border-sidebar-border">
           <SidebarMenu>
             <SidebarMenuItem>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <SidebarMenuButton size="lg" className="w-full justify-between">
-                    <span className="font-semibold truncate">{activeWorkspace?.name || 'Workspace'}</span>
-                    <ChevronsUpDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
-                  </SidebarMenuButton>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="start">
-                  {workspaces.map((workspace) => (
-                    <DropdownMenuItem
-                      key={workspace.id}
-                      onClick={() => {
-                        // Switch workspace logic would go here
-                      }}
-                      className={workspace.id === activeWorkspaceId ? 'bg-accent' : ''}
-                    >
-                      {workspace.name}
+              {editingId === activeWorkspaceId ? (
+                <div className="px-3 py-2">
+                  <EditableText
+                    value={activeWorkspace?.name || ''}
+                    isEditing={true}
+                    onSave={(newName) => {
+                      if (activeWorkspaceId) {
+                        updateWorkspace(activeWorkspaceId, { name: newName });
+                      }
+                      setEditingId(null);
+                    }}
+                    onCancel={() => setEditingId(null)}
+                    className="font-semibold"
+                  />
+                </div>
+              ) : (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <SidebarMenuButton size="lg" className="w-full justify-between">
+                      <span className="font-semibold truncate">{activeWorkspace?.name || 'Workspace'}</span>
+                      <ChevronsUpDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
+                    </SidebarMenuButton>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-56" align="start">
+                    {workspaces.map((workspace) => (
+                      <DropdownMenuItem
+                        key={workspace.id}
+                        onClick={() => setActiveWorkspace(workspace.id)}
+                        className={workspace.id === activeWorkspaceId ? 'bg-accent' : ''}
+                      >
+                        {workspace.name}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => activeWorkspaceId && setEditingId(activeWorkspaceId)}>
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Rename Workspace
                     </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => createWorkspace()}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Workspace
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    <DropdownMenuItem onClick={() => createWorkspace()}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      New Workspace
+                    </DropdownMenuItem>
+                    {workspaces.length > 1 && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => {
+                            if (activeWorkspaceId && confirm('Delete this workspace?')) {
+                              deleteWorkspace(activeWorkspaceId);
+                            }
+                          }}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete Workspace
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>
@@ -153,114 +974,95 @@ export function AppSidebar() {
               <Plus className="h-4 w-4" />
             </SidebarGroupAction>
             <SidebarGroupContent>
-              <SidebarMenu>
-                {activeWorkspace?.projects.map((project) => (
-                  <Collapsible key={project.id} defaultOpen className="group/collapsible">
-                    <SidebarMenuItem>
-                      <CollapsibleTrigger asChild>
-                        <SidebarMenuButton
-                          isActive={activeProjectId === project.id}
-                          onClick={() => navigateToProject(project.id)}
-                        >
-                          <Folder className="h-4 w-4" />
-                          <span>{project.name}</span>
-                          <ChevronRight className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-90" />
-                        </SidebarMenuButton>
-                      </CollapsibleTrigger>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <SidebarMenuAction showOnHover>
-                            <MoreHorizontal className="h-4 w-4" />
-                          </SidebarMenuAction>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent side="right" align="start">
-                          <DropdownMenuItem onClick={() => createCustom(project.id)}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add Custom
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => createCategory(project.id)}>
-                            <Box className="mr-2 h-4 w-4" />
-                            Add Category
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => deleteProject(project.id)}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                      <CollapsibleContent>
-                        <SidebarMenuSub>
-                          {/* Project-level customs */}
-                          {project.customs.map((custom) => (
-                            <SidebarMenuSubItem key={custom.id}>
-                              <SidebarMenuSubButton
-                                isActive={activeCustomId === custom.id}
-                                onClick={() => navigateToCustom(custom.id)}
-                              >
-                                <FileCode className="h-4 w-4" />
-                                <span>{custom.name}</span>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          ))}
-                          {/* Categories */}
-                          {project.categories.map((category) => (
-                            <Collapsible key={category.id} defaultOpen className="group/category">
-                              <SidebarMenuSubItem>
-                                <CollapsibleTrigger asChild>
-                                  <SidebarMenuSubButton
-                                    isActive={activeCategoryId === category.id}
-                                    onClick={() => navigateToCategory(category.id)}
-                                  >
-                                    <Box className="h-4 w-4" />
-                                    <span>{category.name}</span>
-                                    <ChevronRight className="ml-auto h-3 w-3 transition-transform group-data-[state=open]/category:rotate-90" />
-                                  </SidebarMenuSubButton>
-                                </CollapsibleTrigger>
-                                <CollapsibleContent>
-                                  <SidebarMenuSub className="ml-4 border-l-0">
-                                    {category.customs.map((custom) => (
-                                      <SidebarMenuSubItem key={custom.id}>
-                                        <SidebarMenuSubButton
-                                          isActive={activeCustomId === custom.id}
-                                          onClick={() => navigateToCustom(custom.id)}
-                                          size="sm"
-                                        >
-                                          <FileCode className="h-3 w-3" />
-                                          <span>{custom.name}</span>
-                                        </SidebarMenuSubButton>
-                                      </SidebarMenuSubItem>
-                                    ))}
-                                    <SidebarMenuSubItem>
-                                      <SidebarMenuSubButton
-                                        onClick={() => createCustom(project.id, category.id)}
-                                        size="sm"
-                                        className="text-muted-foreground"
-                                      >
-                                        <Plus className="h-3 w-3" />
-                                        <span>Add Custom</span>
-                                      </SidebarMenuSubButton>
-                                    </SidebarMenuSubItem>
-                                  </SidebarMenuSub>
-                                </CollapsibleContent>
-                              </SidebarMenuSubItem>
-                            </Collapsible>
-                          ))}
-                        </SidebarMenuSub>
-                      </CollapsibleContent>
-                    </SidebarMenuItem>
-                  </Collapsible>
-                ))}
-              </SidebarMenu>
+              <SortableContext
+                items={activeWorkspace?.projects.map((p) => p.id) || []}
+                strategy={verticalListSortingStrategy}
+              >
+                <SidebarMenu>
+                  {activeWorkspace?.projects.map((project) => (
+                    <SortableProjectItem
+                      key={project.id}
+                      project={project}
+                      isActive={activeProjectId === project.id}
+                      isEditing={editingId === project.id}
+                      activeCustomId={activeCustomId}
+                      activeCategoryId={activeCategoryId}
+                      editingId={editingId}
+                      onNavigate={() => navigateToProject(project.id)}
+                      onNavigateToCustom={navigateToCustom}
+                      onNavigateToCategory={navigateToCategory}
+                      onEdit={() => setEditingId(project.id)}
+                      onSaveName={(name) => {
+                        updateProject(project.id, { name });
+                        setEditingId(null);
+                      }}
+                      onCancelEdit={() => setEditingId(null)}
+                      onCreateCustom={(categoryId) => createCustom(project.id, categoryId)}
+                      onCreateCategory={() => createCategory(project.id)}
+                      onDeleteProject={() => deleteProject(project.id)}
+                      onDeleteCategory={deleteCategory}
+                      onDeleteCustom={deleteCustom}
+                      onEditCategory={(id) => setEditingId(id)}
+                      onSaveCategoryName={(id, name) => {
+                        updateCategory(id, { name });
+                        setEditingId(null);
+                      }}
+                      onEditCustom={(id) => setEditingId(id)}
+                      onSaveCustomName={(id, name) => {
+                        updateCustom(id, { name });
+                        setEditingId(null);
+                      }}
+                      overId={overId}
+                      activeItem={activeItem}
+                      onMoveToProjectLevel={(customId) => moveCustom(customId, project.id, undefined)}
+                    />
+                  ))}
+                </SidebarMenu>
+              </SortableContext>
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
 
         <SidebarFooter className="border-t border-sidebar-border">
           <SidebarMenu>
+            {/* CLI Sync Button */}
+            {fsApiSupported && (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={handleSyncToCLI}
+                  disabled={isSyncing}
+                  className={syncStatus === 'success' ? 'text-green-500' : syncStatus === 'error' ? 'text-red-500' : ''}
+                >
+                  {isSyncing ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : syncStatus === 'success' ? (
+                    <Check className="h-4 w-4" />
+                  ) : syncStatus === 'error' ? (
+                    <AlertCircle className="h-4 w-4" />
+                  ) : (
+                    <FolderSync className="h-4 w-4" />
+                  )}
+                  <span className="truncate">
+                    {isSyncing
+                      ? 'Syncing...'
+                      : syncMessage
+                      ? syncMessage
+                      : syncDirName
+                      ? `Sync to ${syncDirName}`
+                      : 'Sync to CLI'}
+                  </span>
+                </SidebarMenuButton>
+                {syncDirName && (
+                  <SidebarMenuAction
+                    onClick={handleClearSyncDir}
+                    title="Change sync folder"
+                    showOnHover
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </SidebarMenuAction>
+                )}
+              </SidebarMenuItem>
+            )}
             <SidebarMenuItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -301,6 +1103,17 @@ export function AppSidebar() {
 
       <ExportDialog isOpen={showExportDialog} onClose={() => setShowExportDialog(false)} />
       <ImportDialog isOpen={showImportDialog} onClose={() => setShowImportDialog(false)} />
-    </>
+
+      <DragOverlay>
+        {activeItem ? (
+          <div className="bg-sidebar border border-sidebar-border rounded-md px-3 py-2 shadow-lg text-sm">
+            {activeItem.type === 'project' && <Folder className="h-4 w-4 inline mr-2" />}
+            {activeItem.type === 'category' && <Box className="h-4 w-4 inline mr-2" />}
+            {activeItem.type === 'custom' && <FileCode className="h-4 w-4 inline mr-2" />}
+            <span>Dragging...</span>
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }
