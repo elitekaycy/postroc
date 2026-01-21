@@ -2,6 +2,7 @@
 
 import type { HttpResponse } from '@/lib/types/core';
 import { getStatusColor, formatDuration } from '@/lib/http/http-client';
+import { SyntaxHighlighter } from '@/components/ui/syntax-highlighter';
 import { Copy, Check } from 'lucide-react';
 import { useState } from 'react';
 
@@ -33,9 +34,10 @@ export function ResponseViewer({ response, isLoading }: ResponseViewerProps) {
     gray: 'bg-gray-400',
   }[statusColor];
 
-  const bodyString = typeof response.body === 'string'
-    ? response.body
-    : JSON.stringify(response.body, null, 2);
+  const isJSON = typeof response.body === 'object' && response.body !== null;
+  const bodyString = isJSON
+    ? JSON.stringify(response.body, null, 2)
+    : String(response.body || '');
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(bodyString);
@@ -67,9 +69,12 @@ export function ResponseViewer({ response, isLoading }: ResponseViewerProps) {
         </div>
       )}
 
-      <pre className="p-2 text-xs font-mono max-h-48 overflow-auto whitespace-pre-wrap break-all">
-        {bodyString || '(empty)'}
-      </pre>
+      <div className="max-h-48 overflow-auto">
+        <SyntaxHighlighter
+          code={bodyString || '(empty)'}
+          language={isJSON ? 'json' : 'text'}
+        />
+      </div>
     </div>
   );
 }

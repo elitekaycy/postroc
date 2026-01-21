@@ -1,10 +1,3 @@
-export type Environment = 'local' | 'staging' | 'production';
-
-export interface EnvironmentConfig {
-  name: Environment;
-  baseUrl: string;
-}
-
 export type AuthType = 'none' | 'bearer' | 'api-key' | 'basic';
 
 export interface AuthConfig {
@@ -35,8 +28,7 @@ export interface CategoryConfig {
   id: string;
   name: string;
   projectId: string;
-  environments: EnvironmentConfig[];
-  activeEnvironment: Environment;
+  baseUrl: string;
   auth: AuthConfig;
   defaultHeaders: Header[];
   createdAt: number;
@@ -52,15 +44,35 @@ export type FieldType =
   | 'reference'
   | 'api-fetch';
 
+// 'mixed' allows each array item to be defined individually with different types
+export type ArrayItemType = 'string' | 'number' | 'boolean' | 'object' | 'mixed';
+
 export interface Field {
   id: string;
   key: string;
   type: FieldType;
   value?: unknown;
   referenceId?: string;
+  referenceKey?: string; // Specific key to extract from referenced object
   apiEndpoint?: string;
   isExported: boolean;
   description?: string;
+  children?: Field[]; // Nested fields for object/array types
+  arrayItemType?: ArrayItemType; // For arrays: what type of items it contains
+  arrayCount?: number; // For arrays: how many items to generate (default 3)
+}
+
+// Export configuration for how a custom should export its data when referenced
+export type ExportAsType = 'full' | 'field' | 'array' | 'transform';
+
+export interface ExportConfig {
+  type: ExportAsType;
+  // For 'field' type - which field to export
+  fieldPath?: string;
+  // For 'array' type - extract this field from each array item
+  arrayField?: string;
+  // For 'transform' type - JavaScript code to transform the data
+  transformCode?: string;
 }
 
 export interface Custom {
@@ -71,6 +83,7 @@ export interface Custom {
   fields: Field[];
   requestConfig?: RequestConfig;
   customHeaders?: Header[];
+  exportConfig?: ExportConfig; // How to export when this custom is referenced
   createdAt: number;
   updatedAt: number;
 }

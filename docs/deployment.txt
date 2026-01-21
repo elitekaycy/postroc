@@ -1,0 +1,12 @@
+1 - ensure that docker builds and run project
+  - write pipeline to npm run build success, build and push docker to dockerhub
+  - trigger post pipeline to take from dockerhub and ssh into the server, remove old builds of postroc, add new version, and rerun the docker container
+
+
+
+secrets.DOCKER_USERNAME
+secrets.DOCKER_PASSWORD
+
+secrets.SERVER_IP
+secrets.SERVER_USER 
+secrets.SSH_PRIVATE_KEY

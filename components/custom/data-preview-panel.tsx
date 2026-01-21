@@ -1,10 +1,12 @@
 'use client';
 
 import type { Custom, Category } from '@/lib/types/core';
+import { useWorkspaceStore } from '@/lib/store/workspace-store';
 import { generatePreviewData, resolveSingleCustom, ResolvedData } from '@/lib/engine/data-resolver';
 import { exportData, copyToClipboard, ExportFormat } from '@/lib/export/exporters';
+import { SyntaxHighlighter } from '@/components/ui/syntax-highlighter';
 import { Copy, Check } from 'lucide-react';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 interface DataPreviewPanelProps {
   custom: Custom;
@@ -12,32 +14,59 @@ interface DataPreviewPanelProps {
 }
 
 export function DataPreviewPanel({ custom, category }: DataPreviewPanelProps) {
+  const { workspaces } = useWorkspaceStore();
   const [exportFormat, setExportFormat] = useState<ExportFormat>('json');
   const [previewData, setPreviewData] = useState<Record<string, unknown>>({});
   const [resolvedData, setResolvedData] = useState<ResolvedData | null>(null);
   const [isResolving, setIsResolving] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const regeneratePreview = useCallback(() => {
-    setPreviewData(generatePreviewData(custom));
-    setResolvedData(null);
-  }, [custom]);
-
-  useEffect(() => {
-    regeneratePreview();
-  }, [regeneratePreview]);
-
-  const handleResolve = async () => {
-    setIsResolving(true);
-    try {
-      const result = await resolveSingleCustom(custom, category);
-      setResolvedData(result);
-    } catch {
-      // Silent fail
-    } finally {
-      setIsResolving(false);
+  // Collect all customs from all workspaces/projects/categories
+  const allCustoms = useMemo(() => {
+    const customs: Custom[] = [];
+    for (const workspace of workspaces) {
+      for (const project of workspace.projects) {
+        // Project-level customs
+        customs.push(...project.customs);
+        // Category-level customs
+        for (const cat of project.categories) {
+          customs.push(...cat.customs);
+        }
+      }
     }
-  };
+    return customs;
+  }, [workspaces]);
+
+  // Auto-resolve when custom or dependencies change
+  useEffect(() => {
+    let cancelled = false;
+
+    const resolve = async () => {
+      setIsResolving(true);
+      try {
+        const result = await resolveSingleCustom(custom, category, allCustoms);
+        if (!cancelled) {
+          setResolvedData(result);
+        }
+      } catch {
+        if (!cancelled) {
+          // Fallback to preview data on error
+          setPreviewData(generatePreviewData(custom));
+          setResolvedData(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsResolving(false);
+        }
+      }
+    };
+
+    resolve();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [custom, category, allCustoms]);
 
   const currentData = resolvedData ? resolvedData.data : previewData;
   const formattedData = exportData(currentData, { format: exportFormat });
@@ -51,7 +80,12 @@ export function DataPreviewPanel({ custom, category }: DataPreviewPanelProps) {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] uppercase tracking-wider text-gray-400">Preview</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-wider text-gray-400">Preview</span>
+          {isResolving && (
+            <span className="text-[9px] text-[var(--muted)]">resolving...</span>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <select
             value={exportFormat}
@@ -60,14 +94,9 @@ export function DataPreviewPanel({ custom, category }: DataPreviewPanelProps) {
           >
             <option value="json">JSON</option>
             <option value="xml">XML</option>
+            <option value="form-data">Form Data</option>
+            <option value="url-encoded">URL Encoded</option>
           </select>
-          <button
-            onClick={handleResolve}
-            disabled={isResolving}
-            className="h-5 px-1.5 text-[10px] border border-[var(--border)] rounded hover:bg-[var(--hover)] disabled:opacity-40"
-          >
-            {isResolving ? '...' : 'Resolve'}
-          </button>
           <button
             onClick={handleCopy}
             className="p-0.5 hover:bg-[var(--hover)] rounded"
@@ -82,9 +111,10 @@ export function DataPreviewPanel({ custom, category }: DataPreviewPanelProps) {
       </div>
 
       <div className="flex-1 min-h-0 overflow-auto border border-[var(--border)] rounded bg-[var(--sidebar-bg)]">
-        <pre className="p-3 text-xs font-mono leading-relaxed whitespace-pre-wrap break-all">
-          {formattedData || '{}'}
-        </pre>
+        <SyntaxHighlighter
+          code={formattedData || '{}'}
+          language={exportFormat === 'json' ? 'json' : exportFormat === 'xml' ? 'xml' : 'text'}
+        />
       </div>
     </div>
   );

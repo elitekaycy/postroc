@@ -1,22 +1,23 @@
 'use client';
 
 import { useWorkspaceStore } from '@/lib/store/workspace-store';
-import type { HttpMethod, HttpResponse, FieldType } from '@/lib/types/core';
+import type { HttpMethod, HttpResponse } from '@/lib/types/core';
 import { sendRequest } from '@/lib/http/http-client';
 import { sendRawRequest } from '@/lib/http/http-client';
 import { buildRequestHeaders, buildFullUrl } from '@/lib/http/request-builder';
 import { ResponseViewer } from '@/components/http/response-viewer';
-import { ReferenceSelector } from '@/components/custom/reference-selector';
+import { FieldEditor } from '@/components/custom/field-editor';
 import { DataPreviewPanel } from '@/components/custom/data-preview-panel';
-import { Trash2, Plus, Play, Download } from 'lucide-react';
-import { useState } from 'react';
+import { ExportConfigPanel } from '@/components/custom/export-config-panel';
+import { Plus, Play, Download, ChevronDown, ChevronRight } from 'lucide-react';
+import type { ExportConfig } from '@/lib/types/core';
+import { useState, useEffect } from 'react';
 
 interface CustomEditorProps {
   customId: string;
 }
 
 const HTTP_METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
-const FIELD_TYPES: FieldType[] = ['string', 'number', 'boolean', 'array', 'object', 'reference', 'api-fetch'];
 
 export function CustomEditor({ customId }: CustomEditorProps) {
   const {
@@ -24,8 +25,6 @@ export function CustomEditor({ customId }: CustomEditorProps) {
     getActiveCategory,
     updateCustom,
     addField,
-    updateField,
-    deleteField,
     populateFieldsFromResponse,
   } = useWorkspaceStore();
 
@@ -35,6 +34,12 @@ export function CustomEditor({ customId }: CustomEditorProps) {
   const [response, setResponse] = useState<HttpResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
+  const [responseCollapsed, setResponseCollapsed] = useState(false);
+
+  // Reset response when switching customs
+  useEffect(() => {
+    setResponse(null);
+  }, [customId]);
 
   if (!custom || custom.id !== customId) {
     return null;
@@ -145,106 +150,63 @@ export function CustomEditor({ customId }: CustomEditorProps) {
         <button
           onClick={handleFetchAndPopulate}
           disabled={isFetching || !custom.requestConfig?.endpoint}
-          className="h-8 px-3 text-xs border border-[var(--border)] rounded hover:bg-[var(--hover)] disabled:opacity-40 transition-colors"
-          title="Fetch and populate fields"
+          className="h-8 px-3 text-xs border border-[var(--border)] rounded hover:bg-[var(--hover)] disabled:opacity-40 transition-colors flex items-center gap-1.5"
         >
-          <Download className="w-3.5 h-3.5" />
+          <Download className="w-3 h-3" />
+          <span>{isFetching ? 'Fetching...' : 'Fetch'}</span>
         </button>
 
         <button
           onClick={handleSendRequest}
           disabled={isLoading}
-          className="h-8 px-3 text-xs border border-[var(--border)] rounded hover:bg-[var(--hover)] disabled:opacity-40 transition-colors"
+          className="h-8 px-3 text-xs border border-[var(--border)] rounded hover:bg-[var(--hover)] disabled:opacity-40 transition-colors flex items-center gap-1.5"
         >
-          <Play className="w-3.5 h-3.5" />
+          <Play className="w-3 h-3" />
+          <span>{isLoading ? 'Sending...' : 'Send'}</span>
         </button>
       </div>
 
       {/* Main Content */}
       <div className="flex-1 flex gap-6 min-h-0 overflow-hidden">
         {/* Left - Fields */}
-        <div className="w-1/2 flex flex-col min-h-0">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] uppercase tracking-wider text-gray-400">Fields</span>
-            <button
-              onClick={handleAddField}
-              className="p-1 hover:bg-[var(--hover)] rounded transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5 text-gray-400" />
-            </button>
+        <div className="w-1/2 flex flex-col min-h-0 gap-3">
+          <div className="flex-1 min-h-0 flex flex-col">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] uppercase tracking-wider text-gray-400">Fields</span>
+              <button
+                onClick={handleAddField}
+                className="p-1 hover:bg-[var(--hover)] rounded transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5 text-gray-400" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto">
+              {custom.fields.length === 0 ? (
+                <div className="text-xs text-gray-400 py-8 text-center">
+                  No fields
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {custom.fields.map((field) => (
+                    <FieldEditor
+                      key={field.id}
+                      customId={customId}
+                      field={field}
+                      fieldPath={[field.id]}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="flex-1 overflow-auto">
-            {custom.fields.length === 0 ? (
-              <div className="text-xs text-gray-400 py-8 text-center">
-                No fields
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {custom.fields.map((field) => (
-                  <div key={field.id} className="flex items-center gap-1.5 py-1">
-                    <input
-                      type="checkbox"
-                      checked={field.isExported}
-                      onChange={(e) => updateField(customId, field.id, { isExported: e.target.checked })}
-                      className="w-3 h-3"
-                    />
-
-                    <input
-                      type="text"
-                      value={field.key}
-                      onChange={(e) => updateField(customId, field.id, { key: e.target.value })}
-                      placeholder="key"
-                      className="w-24 h-6 px-1.5 text-xs border border-[var(--border)] rounded bg-[var(--background)]"
-                    />
-
-                    <select
-                      value={field.type}
-                      onChange={(e) => updateField(customId, field.id, { type: e.target.value as FieldType })}
-                      className="h-6 px-1 text-xs border border-[var(--border)] rounded bg-[var(--background)]"
-                    >
-                      {FIELD_TYPES.map((type) => (
-                        <option key={type} value={type}>{type}</option>
-                      ))}
-                    </select>
-
-                    <div className="flex-1">
-                      {field.type === 'reference' ? (
-                        <ReferenceSelector
-                          currentCustomId={customId}
-                          value={field.referenceId}
-                          onChange={(referenceId) => updateField(customId, field.id, { referenceId })}
-                        />
-                      ) : field.type === 'api-fetch' ? (
-                        <input
-                          type="text"
-                          value={field.apiEndpoint || ''}
-                          onChange={(e) => updateField(customId, field.id, { apiEndpoint: e.target.value })}
-                          placeholder="/api/data"
-                          className="w-full h-6 px-1.5 text-xs border border-[var(--border)] rounded bg-[var(--background)]"
-                        />
-                      ) : (
-                        <input
-                          type="text"
-                          value={String(field.value ?? '')}
-                          onChange={(e) => updateField(customId, field.id, { value: e.target.value })}
-                          placeholder="value"
-                          className="w-full h-6 px-1.5 text-xs border border-[var(--border)] rounded bg-[var(--background)]"
-                        />
-                      )}
-                    </div>
-
-                    <button
-                      onClick={() => deleteField(customId, field.id)}
-                      className="p-0.5 text-gray-400 hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* Export Config */}
+          <ExportConfigPanel
+            config={custom.exportConfig}
+            fieldKeys={custom.fields.filter((f) => f.isExported).map((f) => f.key)}
+            onChange={(config: ExportConfig | undefined) => updateCustom(customId, { exportConfig: config })}
+          />
         </div>
 
         {/* Right - Preview & Response */}
@@ -252,11 +214,26 @@ export function CustomEditor({ customId }: CustomEditorProps) {
           <DataPreviewPanel custom={custom} category={category} />
 
           {response && (
-            <div className="flex-1 min-h-0 overflow-auto">
-              <span className="text-[10px] uppercase tracking-wider text-gray-400">Response</span>
-              <div className="mt-2">
-                <ResponseViewer response={response} isLoading={isLoading} />
-              </div>
+            <div className={`${responseCollapsed ? '' : 'flex-1'} min-h-0 overflow-auto`}>
+              <button
+                onClick={() => setResponseCollapsed(!responseCollapsed)}
+                className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-gray-400 hover:text-gray-300"
+              >
+                {responseCollapsed ? (
+                  <ChevronRight className="w-3 h-3" />
+                ) : (
+                  <ChevronDown className="w-3 h-3" />
+                )}
+                Response
+                <span className={`ml-1 px-1 rounded text-[9px] ${response.status >= 200 && response.status < 300 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                  {response.status}
+                </span>
+              </button>
+              {!responseCollapsed && (
+                <div className="mt-2">
+                  <ResponseViewer response={response} isLoading={isLoading} />
+                </div>
+              )}
             </div>
           )}
         </div>

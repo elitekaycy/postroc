@@ -49,10 +49,7 @@ export function buildRequestHeaders(
 
 export function getBaseUrl(category?: Category | null): string {
   if (!category) return '';
-  const env = category.config.environments.find(
-    (e) => e.name === category.config.activeEnvironment
-  );
-  return env?.baseUrl || '';
+  return category.config.baseUrl || '';
 }
 
 export function buildFullUrl(category: Category | null | undefined, endpoint: string): string {

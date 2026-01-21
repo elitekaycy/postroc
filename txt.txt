@@ -1,16 +1,48 @@
-- so when we get an object type i feel like we are supposed to also populate the field of the object too aswell and edit them, so it shows on the preview etc,
+COMPLETED:
+- workspace naming uses unique id (workspace-{shortId})
+- rename functionality and delete functionality in sidebar menus
+- drag and rearrange functionality with visual drop zones
+- array type supports comma-separated default values
+- improved visibility of action buttons (plus signs)
+- custom scrollbar design (6px, minimal)
+- Dockerfile created (multi-stage build with standalone output)
+- CLI tool plan created (see CLI_PLAN.md) - file-based approach
+- Export/Import feature (sidebar > More > Export/Import)
+  - Export workspace, project, or category as .postroc.json
+  - Import with modes: as-new, merge, or replace
+  - Sensitive data stripping option
+- CLI Sync feature (sidebar footer > "Sync to CLI" button)
+  - One-click sync all workspaces to local folder
+  - Uses File System Access API for direct filesystem writes
+  - First time: prompts to select folder (e.g. ~/.config/postroc/data/)
+  - Subsequent syncs: writes directly to saved location
+  - Directory handle persisted in IndexedDB
 
-- the way the reference work i can reference customs, if it from an api, look at the scheme and fetch the api and populate the msin referenceing the custom based on what the person selected for the export custom category, (i should be able to only involve a key value as what to use as ref in another custom when resolving, any data type aswell, and even selective, so eg if its an obj maybe i just want id and number etc)
 
-- also its possible that some of the endpoints would return array of objects numbers etc basically encapsulate other data types, lets take into account that and provide ways for those datatypes (array, object) to encapsulate other datatypes editable and parseable aswell
+TODO:
+- CI/CD GitHub pipeline to build Docker image
+- Pipeline to pull from Docker and deploy to server
+- Implement CLI tool (separate project - postroc-cli)
+- (Optional) Add lightweight backend for collaboration features
 
-- when sidebar is closed lets use icons to show the file tree
-- please lets fix the fonts,
-- please lets add themes
-- cvan we make the preview, json and xml syntax highlighting and lets add formdata and url encoded as options
 
-- lets fix the interactivity design for the sidebar, the hover sholuld be visble, the active color should be seperate from the project, lets do that thing where the select or etc doesnt touch the edges of the sidebar, it has the border a little bit rounded
+NOTES:
+- domain: postroc.scalestash.com (landing) / app.postroc.scalestash.com (app)
+- contact: contact@scalestash.com
+- CLI plan: CLI_PLAN.md (updated to file-based, no database required)
+- Current data storage: localStorage (client-side only)
+- CLI approach: Sync to CLI button writes to ~/.config/postroc/data/
+- For team collaboration/sync, can add Supabase/Firebase later (optional)
 
-- lets add some correct tooltips
-- lets use lighter shades for the themes
 
+STANDALONE PROJECTS:
+- postroc-cli (../postroc-cli/)
+  - CLI tool for generating mock data from PostRoc configs
+  - Commands: generate, list, import, config
+  - Reads from ~/.config/postroc/data/*.postroc.json
+  - npm install -g postroc-cli
+
+- postroc-landing (../postroc-landing/)
+  - Marketing landing page
+  - Static Next.js site (output: export)
+  - Deploy to postroc.scalestash.com

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import type {
   Workspace,
@@ -6,8 +7,6 @@ import type {
   Category,
   Custom,
   CategoryConfig,
-  Environment,
-  EnvironmentConfig,
   AuthConfig,
   Header,
   Field,
@@ -16,6 +15,19 @@ import {
   populateFieldsFromObject,
   extractFieldsFromResponse,
 } from '@/lib/engine/field-populator';
+import {
+  exportWorkspace,
+  exportProject,
+  exportCategory,
+  exportToJSON,
+  type PostrocExport,
+} from '@/lib/export/workspace-export';
+import {
+  validateImport,
+  importFromExport,
+  type ImportMode,
+  type ImportResult,
+} from '@/lib/export/workspace-import';
 
 interface WorkspaceStore {
   workspaces: Workspace[];
@@ -40,10 +52,6 @@ interface WorkspaceStore {
   reorderCategories: (projectId: string, categoryIds: string[]) => void;
   moveCategory: (categoryId: string, targetProjectId: string) => void;
   updateCategoryConfig: (categoryId: string, config: Partial<CategoryConfig>) => void;
-  setActiveEnvironment: (categoryId: string, env: Environment) => void;
-  addEnvironment: (categoryId: string, env: EnvironmentConfig) => void;
-  updateEnvironment: (categoryId: string, envName: Environment, updates: Partial<EnvironmentConfig>) => void;
-  deleteEnvironment: (categoryId: string, envName: Environment) => void;
   updateAuth: (categoryId: string, auth: Partial<AuthConfig>) => void;
   addHeader: (categoryId: string, header: Omit<Header, 'id'>) => void;
   updateHeader: (categoryId: string, headerId: string, updates: Partial<Header>) => void;
@@ -59,6 +67,9 @@ interface WorkspaceStore {
   updateField: (customId: string, fieldId: string, updates: Partial<Field>) => void;
   deleteField: (customId: string, fieldId: string) => void;
   reorderFields: (customId: string, fieldIds: string[]) => void;
+  addNestedField: (customId: string, parentFieldId: string, field: Omit<Field, 'id'>) => void;
+  updateNestedField: (customId: string, fieldPath: string[], updates: Partial<Field>) => void;
+  deleteNestedField: (customId: string, fieldPath: string[]) => void;
   populateFieldsFromResponse: (customId: string, data: Record<string, unknown>) => void;
 
   setActiveWorkspace: (id: string | null) => void;
@@ -69,38 +80,51 @@ interface WorkspaceStore {
 
   getActiveCategory: () => Category | null;
   getActiveCustom: () => Custom | null;
+
+  // Export/Import
+  exportWorkspaceToJSON: (workspaceId: string, includeSecrets?: boolean) => string | null;
+  exportProjectToJSON: (projectId: string, includeSecrets?: boolean) => string | null;
+  exportCategoryToJSON: (categoryId: string, includeSecrets?: boolean) => string | null;
+  importFromJSON: (content: string, mode: ImportMode) => ImportResult;
+  clearAllData: () => void;
 }
 
 const createDefaultCategoryConfig = (projectId: string, name: string): CategoryConfig => ({
   id: crypto.randomUUID(),
   name,
   projectId,
-  environments: [
-    { name: 'local', baseUrl: 'http://localhost:3000' },
-    { name: 'staging', baseUrl: '' },
-    { name: 'production', baseUrl: '' },
-  ],
-  activeEnvironment: 'local',
+  baseUrl: 'http://localhost:3000',
   auth: { type: 'none' },
-  defaultHeaders: [],
+  defaultHeaders: [
+    { id: crypto.randomUUID(), key: 'Content-Type', value: 'application/json', enabled: true },
+    { id: crypto.randomUUID(), key: 'Accept', value: 'application/json', enabled: true },
+    { id: crypto.randomUUID(), key: 'User-Agent', value: 'PostRoc/1.0', enabled: true },
+  ],
   createdAt: Date.now(),
   updatedAt: Date.now(),
 });
 
 let lastCreatedId: string | null = null;
 
+const STORAGE_KEY = 'postroc-workspaces';
+const STORAGE_VERSION = 1;
+
+// Generate short unique ID for naming
+const generateShortId = () => crypto.randomUUID().split('-')[0];
+
 export const useWorkspaceStore = create<WorkspaceStore>()(
-  immer((set, get) => ({
-    workspaces: [],
-    activeWorkspaceId: null,
-    activeProjectId: null,
-    activeCategoryId: null,
-    activeCustomId: null,
-    editingId: null,
+  persist(
+    immer((set, get) => ({
+      workspaces: [],
+      activeWorkspaceId: null,
+      activeProjectId: null,
+      activeCategoryId: null,
+      activeCustomId: null,
+      editingId: null,
 
     createWorkspace: (name?: string) => {
       const id = crypto.randomUUID();
-      const workspaceName = name || `Workspace ${get().workspaces.length + 1}`;
+      const workspaceName = name || `workspace-${generateShortId()}`;
       set((state) => {
         const workspace: Workspace = {
           id,
@@ -139,7 +163,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
       if (!workspace) return null;
 
       const id = crypto.randomUUID();
-      const projectName = name || `Project ${workspace.projects.length + 1}`;
+      const projectName = name || `project-${generateShortId()}`;
       set((state) => {
         const ws = state.workspaces.find((w) => w.id === workspaceId);
         if (ws) {
@@ -205,7 +229,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
       if (!project) return null;
 
       const id = crypto.randomUUID();
-      const categoryName = name || `Category ${project.categories.length + 1}`;
+      const categoryName = name || `category-${generateShortId()}`;
       set((state) => {
         for (const workspace of state.workspaces) {
           const proj = workspace.projects.find((p) => p.id === projectId);
@@ -319,69 +343,6 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
         }
       }),
 
-    setActiveEnvironment: (categoryId: string, env: Environment) =>
-      set((state) => {
-        for (const workspace of state.workspaces) {
-          for (const project of workspace.projects) {
-            const category = project.categories.find((c) => c.id === categoryId);
-            if (category) {
-              category.config.activeEnvironment = env;
-              category.config.updatedAt = Date.now();
-              category.updatedAt = Date.now();
-              return;
-            }
-          }
-        }
-      }),
-
-    addEnvironment: (categoryId: string, env: EnvironmentConfig) =>
-      set((state) => {
-        for (const workspace of state.workspaces) {
-          for (const project of workspace.projects) {
-            const category = project.categories.find((c) => c.id === categoryId);
-            if (category) {
-              category.config.environments.push(env);
-              category.config.updatedAt = Date.now();
-              category.updatedAt = Date.now();
-              return;
-            }
-          }
-        }
-      }),
-
-    updateEnvironment: (categoryId: string, envName: Environment, updates: Partial<EnvironmentConfig>) =>
-      set((state) => {
-        for (const workspace of state.workspaces) {
-          for (const project of workspace.projects) {
-            const category = project.categories.find((c) => c.id === categoryId);
-            if (category) {
-              const env = category.config.environments.find((e) => e.name === envName);
-              if (env) {
-                Object.assign(env, updates);
-                category.config.updatedAt = Date.now();
-                category.updatedAt = Date.now();
-              }
-              return;
-            }
-          }
-        }
-      }),
-
-    deleteEnvironment: (categoryId: string, envName: Environment) =>
-      set((state) => {
-        for (const workspace of state.workspaces) {
-          for (const project of workspace.projects) {
-            const category = project.categories.find((c) => c.id === categoryId);
-            if (category) {
-              category.config.environments = category.config.environments.filter((e) => e.name !== envName);
-              category.config.updatedAt = Date.now();
-              category.updatedAt = Date.now();
-              return;
-            }
-          }
-        }
-      }),
-
     updateAuth: (categoryId: string, auth: Partial<AuthConfig>) =>
       set((state) => {
         for (const workspace of state.workspaces) {
@@ -463,11 +424,8 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
       }
       if (!project) return null;
 
-      const existingCount = categoryId && category
-        ? category.customs.length
-        : project.customs.length;
       const id = crypto.randomUUID();
-      const customName = name || `Custom ${existingCount + 1}`;
+      const customName = name || `custom-${generateShortId()}`;
 
       set((state) => {
         for (const workspace of state.workspaces) {
@@ -746,8 +704,147 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
         }
       }),
 
+    addNestedField: (customId: string, parentFieldId: string, field: Omit<Field, 'id'>) =>
+      set((state) => {
+        const findAndAddNested = (fields: Field[]): boolean => {
+          for (const f of fields) {
+            if (f.id === parentFieldId) {
+              if (!f.children) f.children = [];
+              f.children.push({ ...field, id: crypto.randomUUID() });
+              return true;
+            }
+            if (f.children && findAndAddNested(f.children)) {
+              return true;
+            }
+          }
+          return false;
+        };
+
+        for (const workspace of state.workspaces) {
+          for (const project of workspace.projects) {
+            const projectCustom = project.customs.find((c) => c.id === customId);
+            if (projectCustom) {
+              if (findAndAddNested(projectCustom.fields)) {
+                projectCustom.updatedAt = Date.now();
+              }
+              return;
+            }
+            for (const category of project.categories) {
+              const custom = category.customs.find((c) => c.id === customId);
+              if (custom) {
+                if (findAndAddNested(custom.fields)) {
+                  custom.updatedAt = Date.now();
+                }
+                return;
+              }
+            }
+          }
+        }
+      }),
+
+    updateNestedField: (customId: string, fieldPath: string[], updates: Partial<Field>) =>
+      set((state) => {
+        const findAndUpdate = (fields: Field[], path: string[], depth: number): boolean => {
+          if (depth >= path.length) return false;
+          const targetId = path[depth];
+          for (const f of fields) {
+            if (f.id === targetId) {
+              if (depth === path.length - 1) {
+                Object.assign(f, updates);
+                return true;
+              }
+              if (f.children) {
+                return findAndUpdate(f.children, path, depth + 1);
+              }
+              return false;
+            }
+          }
+          return false;
+        };
+
+        for (const workspace of state.workspaces) {
+          for (const project of workspace.projects) {
+            const projectCustom = project.customs.find((c) => c.id === customId);
+            if (projectCustom) {
+              if (findAndUpdate(projectCustom.fields, fieldPath, 0)) {
+                projectCustom.updatedAt = Date.now();
+              }
+              return;
+            }
+            for (const category of project.categories) {
+              const custom = category.customs.find((c) => c.id === customId);
+              if (custom) {
+                if (findAndUpdate(custom.fields, fieldPath, 0)) {
+                  custom.updatedAt = Date.now();
+                }
+                return;
+              }
+            }
+          }
+        }
+      }),
+
+    deleteNestedField: (customId: string, fieldPath: string[]) =>
+      set((state) => {
+        const findAndDelete = (fields: Field[], path: string[], depth: number): boolean => {
+          if (depth >= path.length) return false;
+          const targetId = path[depth];
+
+          if (depth === path.length - 1) {
+            const index = fields.findIndex((f) => f.id === targetId);
+            if (index !== -1) {
+              fields.splice(index, 1);
+              return true;
+            }
+            return false;
+          }
+
+          for (const f of fields) {
+            if (f.children && findAndDelete(f.children, path, depth + 1)) {
+              return true;
+            }
+          }
+          return false;
+        };
+
+        for (const workspace of state.workspaces) {
+          for (const project of workspace.projects) {
+            const projectCustom = project.customs.find((c) => c.id === customId);
+            if (projectCustom) {
+              if (findAndDelete(projectCustom.fields, fieldPath, 0)) {
+                projectCustom.updatedAt = Date.now();
+              }
+              return;
+            }
+            for (const category of project.categories) {
+              const custom = category.customs.find((c) => c.id === customId);
+              if (custom) {
+                if (findAndDelete(custom.fields, fieldPath, 0)) {
+                  custom.updatedAt = Date.now();
+                }
+                return;
+              }
+            }
+          }
+        }
+      }),
+
     populateFieldsFromResponse: (customId: string, data: Record<string, unknown>) =>
       set((state) => {
+        // Helper to recursively add IDs to field and its children
+        const addIdsToField = (fieldDef: Omit<Field, 'id'>): Field => {
+          const field: Field = {
+            ...fieldDef,
+            id: crypto.randomUUID(),
+          };
+          if (fieldDef.children && fieldDef.children.length > 0) {
+            field.children = fieldDef.children.map((child) =>
+              addIdsToField(child as Omit<Field, 'id'>)
+            );
+          }
+          return field;
+        };
+
         // Extract fields from response (handles nested data patterns)
         const extractedData = extractFieldsFromResponse(data);
         const newFieldDefs = populateFieldsFromObject(extractedData);
@@ -761,10 +858,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
               // Only add fields that don't already exist
               for (const fieldDef of newFieldDefs) {
                 if (!existingKeys.has(fieldDef.key)) {
-                  projectCustom.fields.push({
-                    ...fieldDef,
-                    id: crypto.randomUUID(),
-                  });
+                  projectCustom.fields.push(addIdsToField(fieldDef));
                 }
               }
               projectCustom.updatedAt = Date.now();
@@ -778,10 +872,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
                 // Only add fields that don't already exist
                 for (const fieldDef of newFieldDefs) {
                   if (!existingKeys.has(fieldDef.key)) {
-                    custom.fields.push({
-                      ...fieldDef,
-                      id: crypto.randomUUID(),
-                    });
+                    custom.fields.push(addIdsToField(fieldDef));
                   }
                 }
                 custom.updatedAt = Date.now();
@@ -860,5 +951,160 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
       }
       return null;
     },
-  }))
+
+    // Export/Import
+    exportWorkspaceToJSON: (workspaceId: string, includeSecrets = false) => {
+      const state = get();
+      const exportData = exportWorkspace(state.workspaces, workspaceId, { includeSecrets });
+      return exportData ? exportToJSON(exportData) : null;
+    },
+
+    exportProjectToJSON: (projectId: string, includeSecrets = false) => {
+      const state = get();
+      const exportData = exportProject(state.workspaces, projectId, { includeSecrets });
+      return exportData ? exportToJSON(exportData) : null;
+    },
+
+    exportCategoryToJSON: (categoryId: string, includeSecrets = false) => {
+      const state = get();
+      const exportData = exportCategory(state.workspaces, categoryId, { includeSecrets });
+      return exportData ? exportToJSON(exportData) : null;
+    },
+
+    importFromJSON: (content: string, mode: ImportMode): ImportResult => {
+      const validation = validateImport(content);
+      if (!validation.valid || !validation.data) {
+        return { success: false, error: validation.error };
+      }
+
+      const state = get();
+      const result = importFromExport(
+        validation.data,
+        state.activeWorkspaceId || undefined,
+        state.activeProjectId || undefined
+      );
+
+      if (!result.success || !result.data) {
+        return result;
+      }
+
+      // Apply the import based on mode
+      if (mode === 'replace') {
+        // Clear existing data first
+        set((s) => {
+          s.workspaces = [];
+          s.activeWorkspaceId = null;
+          s.activeProjectId = null;
+          s.activeCategoryId = null;
+          s.activeCustomId = null;
+        });
+      }
+
+      // Add the imported data
+      if (result.data.type === 'workspace' && result.data.workspaces) {
+        set((s) => {
+          for (const workspace of result.data!.workspaces!) {
+            s.workspaces.push(workspace);
+          }
+          if (result.data!.workspaces!.length > 0) {
+            s.activeWorkspaceId = result.data!.workspaces![0].id;
+          }
+        });
+      } else if (result.data.type === 'project' && result.data.projects) {
+        set((s) => {
+          // Find or create workspace
+          let workspace = s.workspaces.find((w) => w.id === s.activeWorkspaceId);
+          if (!workspace) {
+            workspace = {
+              id: crypto.randomUUID(),
+              name: 'Imported Workspace',
+              projects: [],
+              createdAt: Date.now(),
+            };
+            s.workspaces.push(workspace);
+            s.activeWorkspaceId = workspace.id;
+          }
+
+          for (const project of result.data!.projects!) {
+            project.workspaceId = workspace.id;
+            workspace.projects.push(project);
+          }
+
+          if (result.data!.projects!.length > 0) {
+            s.activeProjectId = result.data!.projects![0].id;
+          }
+        });
+      } else if (result.data.type === 'category' && result.data.categories) {
+        set((s) => {
+          // Find or create workspace and project
+          let workspace = s.workspaces.find((w) => w.id === s.activeWorkspaceId);
+          if (!workspace) {
+            workspace = {
+              id: crypto.randomUUID(),
+              name: 'Imported Workspace',
+              projects: [],
+              createdAt: Date.now(),
+            };
+            s.workspaces.push(workspace);
+            s.activeWorkspaceId = workspace.id;
+          }
+
+          let project = workspace.projects.find((p) => p.id === s.activeProjectId);
+          if (!project) {
+            project = {
+              id: crypto.randomUUID(),
+              name: 'Imported Project',
+              workspaceId: workspace.id,
+              categories: [],
+              customs: [],
+              createdAt: Date.now(),
+            };
+            workspace.projects.push(project);
+            s.activeProjectId = project.id;
+          }
+
+          for (const category of result.data!.categories!) {
+            category.projectId = project.id;
+            category.config.projectId = project.id;
+            project.categories.push(category);
+          }
+
+          if (result.data!.categories!.length > 0) {
+            s.activeCategoryId = result.data!.categories![0].id;
+          }
+        });
+      }
+
+      return result;
+    },
+
+    clearAllData: () =>
+      set((state) => {
+        state.workspaces = [];
+        state.activeWorkspaceId = null;
+        state.activeProjectId = null;
+        state.activeCategoryId = null;
+        state.activeCustomId = null;
+        state.editingId = null;
+      }),
+  })),
+    {
+      name: STORAGE_KEY,
+      version: STORAGE_VERSION,
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        workspaces: state.workspaces,
+        activeWorkspaceId: state.activeWorkspaceId,
+        activeProjectId: state.activeProjectId,
+        activeCategoryId: state.activeCategoryId,
+        activeCustomId: state.activeCustomId,
+      }),
+      onRehydrateStorage: () => (state) => {
+        // Create default workspace if none exists after loading from storage
+        if (state && state.workspaces.length === 0) {
+          state.createWorkspace();
+        }
+      },
+    }
+  )
 );

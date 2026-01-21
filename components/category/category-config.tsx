@@ -1,7 +1,7 @@
 'use client';
 
 import { useWorkspaceStore } from '@/lib/store/workspace-store';
-import type { AuthType, Environment } from '@/lib/types/core';
+import type { AuthType } from '@/lib/types/core';
 import { Trash2, Plus } from 'lucide-react';
 import { useState } from 'react';
 
@@ -13,8 +13,7 @@ export function CategoryConfig({ categoryId }: CategoryConfigProps) {
   const {
     getActiveCategory,
     updateCategory,
-    setActiveEnvironment,
-    updateEnvironment,
+    updateCategoryConfig,
     updateAuth,
     addHeader,
     updateHeader,
@@ -56,29 +55,16 @@ export function CategoryConfig({ categoryId }: CategoryConfigProps) {
         />
       </div>
 
-      {/* Environments */}
+      {/* Base URL */}
       <div>
-        <label className="text-[10px] uppercase tracking-wider text-gray-400">Environments</label>
-        <div className="mt-2 space-y-2">
-          {config.environments.map((env) => (
-            <div key={env.name} className="flex items-center gap-2">
-              <input
-                type="radio"
-                checked={config.activeEnvironment === env.name}
-                onChange={() => setActiveEnvironment(categoryId, env.name)}
-                className="w-3 h-3"
-              />
-              <span className="w-20 text-xs capitalize">{env.name}</span>
-              <input
-                type="text"
-                value={env.baseUrl}
-                onChange={(e) => updateEnvironment(categoryId, env.name, { baseUrl: e.target.value })}
-                placeholder="https://api.example.com"
-                className="flex-1 h-7 px-2 text-xs border border-[var(--border)] rounded bg-[var(--background)]"
-              />
-            </div>
-          ))}
-        </div>
+        <label className="text-[10px] uppercase tracking-wider text-gray-400">Base URL</label>
+        <input
+          type="text"
+          value={config.baseUrl || ''}
+          onChange={(e) => updateCategoryConfig(categoryId, { baseUrl: e.target.value })}
+          placeholder="https://api.example.com"
+          className="mt-1 w-full h-8 px-2 text-sm border border-[var(--border)] rounded bg-[var(--background)]"
+        />
       </div>
 
       {/* Authentication */}
