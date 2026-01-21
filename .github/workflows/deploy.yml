@@ -49,4 +49,4 @@ jobs:
             docker pull ${{ secrets.DOCKER_USERNAME }}/scalestash-postroc:latest
             docker stop scalestash-postroc|| true
             docker rm scalestash-postroc || true
-            docker run -d -p 9090:9090 --name scalestash-postroc ${{ secrets.DOCKER_USERNAME }}/scalestash-postroc:latest
+            docker run -d -p 9091:9091 --name scalestash-postroc ${{ secrets.DOCKER_USERNAME }}/scalestash-postroc:latest
