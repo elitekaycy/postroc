@@ -51,7 +51,7 @@ import {
   Check,
   AlertCircle,
 } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { ExportDialog } from '@/components/dialogs/export-dialog';
 import { ImportDialog } from '@/components/dialogs/import-dialog';
 import {
@@ -202,6 +202,10 @@ function SortableProjectItem({
   overId,
   activeItem,
   onMoveToProjectLevel,
+  isExpanded,
+  onToggleExpand,
+  expandedCategories,
+  onToggleCategoryExpand,
 }: {
   project: Project;
   isActive: boolean;
@@ -227,6 +231,10 @@ function SortableProjectItem({
   overId: string | null;
   activeItem: DragItem | null;
   onMoveToProjectLevel: (customId: string) => void;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  expandedCategories: Set<string>;
+  onToggleCategoryExpand: (id: string) => void;
 }) {
   const {
     attributes,
@@ -256,7 +264,7 @@ function SortableProjectItem({
   const showProjectDropZone = activeItem?.type === 'custom' && activeItem.isInCategory;
 
   return (
-    <Collapsible defaultOpen className="group/collapsible">
+    <Collapsible open={isExpanded} onOpenChange={onToggleExpand} className="group/collapsible">
       <SidebarMenuItem ref={setNodeRef} style={style} className="group/item">
         {isEditing ? (
           <div className="flex items-center gap-2 px-2 py-1.5">
@@ -371,6 +379,8 @@ function SortableProjectItem({
                   onSaveCustomName={onSaveCustomName}
                   onDeleteCustom={onDeleteCustom}
                   overId={overId}
+                  isExpanded={expandedCategories.has(category.id)}
+                  onToggleExpand={() => onToggleCategoryExpand(category.id)}
                 />
               ))}
             </SortableContext>
@@ -400,6 +410,8 @@ function SortableCategoryItem({
   onSaveCustomName,
   onDeleteCustom,
   overId,
+  isExpanded,
+  onToggleExpand,
 }: {
   category: Category;
   projectId: string;
@@ -418,6 +430,8 @@ function SortableCategoryItem({
   onSaveCustomName: (id: string, name: string) => void;
   onDeleteCustom: (id: string) => void;
   overId: string | null;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
 }) {
   const {
     attributes,
@@ -440,7 +454,7 @@ function SortableCategoryItem({
   const isDropTarget = overId === category.id;
 
   return (
-    <Collapsible defaultOpen className="group/category">
+    <Collapsible open={isExpanded} onOpenChange={onToggleExpand} className="group/category">
       <SidebarMenuSubItem
         ref={setNodeRef}
         style={style}
@@ -597,8 +611,8 @@ function SortableCustomItem({
           />
         </div>
       ) : (
-        <DropdownMenu>
-          <div className="flex items-center">
+        <>
+          <div className="flex items-center pr-6">
             <DragHandle listeners={listeners} attributes={attributes} />
             <SidebarMenuSubButton
               isActive={isActive}
@@ -610,23 +624,25 @@ function SortableCustomItem({
               <span className="truncate">{custom.name}</span>
             </SidebarMenuSubButton>
           </div>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuAction showOnHover className="right-1">
-              <MoreHorizontal className="h-3 w-3" />
-            </SidebarMenuAction>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="right" align="start">
-            <DropdownMenuItem onClick={onEdit}>
-              <Pencil className="mr-2 h-4 w-4" />
-              Rename
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onDelete} className="text-destructive">
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <SidebarMenuAction showOnHover>
+                <MoreHorizontal className="h-3 w-3" />
+              </SidebarMenuAction>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="right" align="start">
+              <DropdownMenuItem onClick={onEdit}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onDelete} className="text-destructive">
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
       )}
     </SidebarMenuSubItem>
   );
@@ -667,6 +683,35 @@ export function AppSidebar() {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [activeItem, setActiveItem] = useState<DragItem | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
+
+  // Expanded state tracking for projects and categories
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [initialized, setInitialized] = useState(false);
+
+  const toggleProjectExpand = useCallback((id: string) => {
+    setExpandedProjects((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleCategoryExpand = useCallback((id: string) => {
+    setExpandedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
 
   // CLI Sync state
   const [isSyncing, setIsSyncing] = useState(false);
@@ -748,17 +793,54 @@ export function AppSidebar() {
     })
   );
 
-  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
+  const activeWorkspace = useMemo(
+    () => workspaces.find((w) => w.id === activeWorkspaceId),
+    [workspaces, activeWorkspaceId]
+  );
 
-  const handleDragStart = (event: DragStartEvent) => {
+  // Initialize expanded state and auto-expand new items
+  useEffect(() => {
+    if (!activeWorkspace) return;
+
+    if (!initialized) {
+      // First load: expand all
+      setExpandedProjects(new Set(activeWorkspace.projects.map((p) => p.id)));
+      const catIds: string[] = [];
+      activeWorkspace.projects.forEach((p) => {
+        p.categories.forEach((c) => catIds.push(c.id));
+      });
+      setExpandedCategories(new Set(catIds));
+      setInitialized(true);
+    } else {
+      // Subsequent updates: auto-expand any new project/category
+      setExpandedProjects((prev) => {
+        const next = new Set(prev);
+        activeWorkspace.projects.forEach((p) => {
+          if (!prev.has(p.id)) next.add(p.id);
+        });
+        return next;
+      });
+      setExpandedCategories((prev) => {
+        const next = new Set(prev);
+        activeWorkspace.projects.forEach((p) => {
+          p.categories.forEach((c) => {
+            if (!prev.has(c.id)) next.add(c.id);
+          });
+        });
+        return next;
+      });
+    }
+  }, [activeWorkspace, initialized]);
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
     const { active } = event;
     setActiveItem(active.data.current as DragItem);
-  };
+  }, []);
 
-  const handleDragOver = (event: DragOverEvent) => {
+  const handleDragOver = useCallback((event: DragOverEvent) => {
     const { over } = event;
     setOverId(over?.id as string || null);
-  };
+  }, []);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -810,12 +892,14 @@ export function AppSidebar() {
       const overDataAny = over.data.current as { type?: string; projectId?: string } | undefined;
       if (overDataAny?.type === 'project-drop' && overDataAny.projectId) {
         moveCustom(activeData.id as string, overDataAny.projectId, undefined);
+        setExpandedProjects((prev) => new Set(prev).add(overDataAny.projectId!));
         return;
       }
 
       // Handle dropping on a category - move custom into that category
       if (overData?.type === 'category') {
         moveCustom(activeData.id as string, sourceProjectId, over.id as string);
+        setExpandedCategories((prev) => new Set(prev).add(over.id as string));
       }
       // Handle dropping on a project-level custom - move to project level or reorder
       else if (overData?.type === 'custom' && !overData.isInCategory) {
@@ -997,8 +1081,20 @@ export function AppSidebar() {
                         setEditingId(null);
                       }}
                       onCancelEdit={() => setEditingId(null)}
-                      onCreateCustom={(categoryId) => createCustom(project.id, categoryId)}
-                      onCreateCategory={() => createCategory(project.id)}
+                      onCreateCustom={(categoryId) => {
+                        createCustom(project.id, categoryId);
+                        // Expand the project
+                        setExpandedProjects((prev) => new Set(prev).add(project.id));
+                        // If adding to a category, expand it too
+                        if (categoryId) {
+                          setExpandedCategories((prev) => new Set(prev).add(categoryId));
+                        }
+                      }}
+                      onCreateCategory={() => {
+                        createCategory(project.id);
+                        // Expand the project to show the new category
+                        setExpandedProjects((prev) => new Set(prev).add(project.id));
+                      }}
                       onDeleteProject={() => deleteProject(project.id)}
                       onDeleteCategory={deleteCategory}
                       onDeleteCustom={deleteCustom}
@@ -1015,6 +1111,10 @@ export function AppSidebar() {
                       overId={overId}
                       activeItem={activeItem}
                       onMoveToProjectLevel={(customId) => moveCustom(customId, project.id, undefined)}
+                      isExpanded={expandedProjects.has(project.id)}
+                      onToggleExpand={() => toggleProjectExpand(project.id)}
+                      expandedCategories={expandedCategories}
+                      onToggleCategoryExpand={toggleCategoryExpand}
                     />
                   ))}
                 </SidebarMenu>
