@@ -202,6 +202,31 @@ export function FieldEditor({ customId, field, fieldPath, depth = 0 }: FieldEdit
                 <Plus className="w-3.5 h-3.5 text-[var(--foreground)] opacity-70 group-hover/addbtn:opacity-100" />
               </button>
             </div>
+          ) : field.type === 'number' ? (
+            <input
+              type="number"
+              value={field.value !== undefined && field.value !== null && field.value !== '' ? Number(field.value) : ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                handleUpdate({ value: val === '' ? undefined : Number(val) });
+              }}
+              placeholder="value"
+              step="any"
+              className="w-full h-6 px-1.5 text-xs border border-[var(--border)] rounded bg-[var(--background)]"
+            />
+          ) : field.type === 'boolean' ? (
+            <select
+              value={field.value !== undefined && field.value !== null ? String(field.value) : ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                handleUpdate({ value: val === '' ? undefined : val === 'true' });
+              }}
+              className="h-6 px-1 text-xs border border-[var(--border)] rounded bg-[var(--background)]"
+            >
+              <option value="">random</option>
+              <option value="true">true</option>
+              <option value="false">false</option>
+            </select>
           ) : (
             <input
               type="text"

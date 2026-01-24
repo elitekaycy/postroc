@@ -56,15 +56,44 @@ export function createFieldFromValue(
     }
     if (children.length > 0) {
       field.children = children as Field[];
+      field.value = undefined; // Clear raw value so generation uses children
     }
   }
 
-  // Handle arrays - create children structure from first item (template)
-  // but keep full array as value
+  // Handle arrays - detect if items are mixed types, objects, or uniform
   if (type === 'array' && Array.isArray(value) && value.length > 0) {
-    const firstItem = value[0];
-    if (firstItem && typeof firstItem === 'object' && !Array.isArray(firstItem)) {
+    // Detect types of all items
+    const itemTypes = new Set(value.map((item) => {
+      if (item === null || item === undefined) return 'null';
+      if (Array.isArray(item)) return 'array';
+      return typeof item;
+    }));
+
+    // Remove 'null' from consideration for type detection
+    itemTypes.delete('null');
+
+    const hasMultipleTypes = itemTypes.size > 1;
+    const allObjects = itemTypes.size === 1 && itemTypes.has('object');
+    const allStrings = itemTypes.size === 1 && itemTypes.has('string');
+    const allNumbers = itemTypes.size === 1 && itemTypes.has('number');
+    const allBooleans = itemTypes.size === 1 && itemTypes.has('boolean');
+
+    if (hasMultipleTypes) {
+      // Mixed array - each item is a separate child with its own type
+      field.arrayItemType = 'mixed';
+      field.value = undefined; // Don't store raw value for mixed arrays
+      const children: Omit<Field, 'id'>[] = [];
+      value.forEach((item, index) => {
+        const child = createFieldFromValue(`[${index}]`, item);
+        children.push(child);
+      });
+      field.children = children as Field[];
+    } else if (allObjects) {
       // Array of objects - create children from first item structure
+      field.arrayItemType = 'object';
+      field.arrayCount = value.length;
+      field.value = undefined;
+      const firstItem = value[0];
       const children: Omit<Field, 'id'>[] = [];
       for (const [childKey, childValue] of Object.entries(firstItem as Record<string, unknown>)) {
         children.push(createFieldFromValue(childKey, childValue));
@@ -72,6 +101,22 @@ export function createFieldFromValue(
       if (children.length > 0) {
         field.children = children as Field[];
       }
+    } else if (allNumbers) {
+      field.arrayItemType = 'number';
+      field.arrayCount = value.length;
+      field.value = value.join(', ');
+    } else if (allBooleans) {
+      field.arrayItemType = 'boolean';
+      field.arrayCount = value.length;
+      field.value = value.map(String).join(', ');
+    } else if (allStrings) {
+      field.arrayItemType = 'string';
+      field.arrayCount = value.length;
+      field.value = (value as string[]).join(', ');
+    } else {
+      // Default to string
+      field.arrayItemType = 'string';
+      field.arrayCount = value.length;
     }
   }
 

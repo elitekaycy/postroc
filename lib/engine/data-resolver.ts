@@ -124,19 +124,65 @@ function resolveReference(
   return referencedData.data;
 }
 
+/**
+ * Resolve an api-fetch field.
+ * If the field has children (populated from a previous fetch), generate from those.
+ * If it has a stored value, use that directly.
+ * Only fetch live if no stored data exists.
+ */
 async function resolveApiFetch(
   field: Field,
   category: Category | null | undefined
 ): Promise<unknown> {
+  // If the field has children (populated from fetch), generate data from them
+  if (field.children && field.children.length > 0) {
+    if (field.arrayItemType === 'mixed') {
+      // Mixed array: each child is one item in the array
+      return field.children
+        .filter((child) => child.isExported)
+        .map((child) => generateFieldValue(child));
+    }
+
+    if (field.arrayItemType === 'object') {
+      // Array of objects: generate N items using children as template
+      const count = field.arrayCount ?? field.children.length;
+      const items: Record<string, unknown>[] = [];
+      for (let i = 0; i < count; i++) {
+        const obj: Record<string, unknown> = {};
+        for (const child of field.children) {
+          if (child.isExported) {
+            obj[child.key] = generateFieldValue(child);
+          }
+        }
+        items.push(obj);
+      }
+      return items;
+    }
+
+    // Object type with children
+    const obj: Record<string, unknown> = {};
+    for (const child of field.children) {
+      if (child.isExported) {
+        obj[child.key] = generateFieldValue(child);
+      }
+    }
+    return obj;
+  }
+
+  // If value is stored directly, use it
+  if (field.value !== undefined && field.value !== null && field.value !== '') {
+    return field.value;
+  }
+
+  // No stored data - attempt live fetch if endpoint is configured
   if (!field.apiEndpoint) {
     return generateFieldValue({ ...field, type: 'string' });
   }
 
-  // api-fetch can work without category now
   try {
     return await fetchFieldData(field, category ?? undefined);
-  } catch (error) {
-    return generateFieldValue({ ...field, type: 'string' });
+  } catch {
+    return null;
   }
 }
 

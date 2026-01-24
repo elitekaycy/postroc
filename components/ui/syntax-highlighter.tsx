@@ -79,44 +79,78 @@ function highlightXML(code: string): string {
 }
 
 function highlightJavaScript(code: string): string {
-  const keywords = [
+  const keywords = new Set([
     'const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while',
     'do', 'switch', 'case', 'break', 'continue', 'new', 'this', 'class',
     'extends', 'import', 'export', 'from', 'async', 'await', 'try', 'catch',
     'finally', 'throw', 'typeof', 'instanceof', 'in', 'of', 'delete', 'void',
-  ];
-  const builtins = ['console', 'Math', 'JSON', 'Array', 'Object', 'String', 'Number', 'Boolean', 'Date', 'Promise', 'Map', 'Set'];
+  ]);
+  const builtins = new Set([
+    'console', 'Math', 'JSON', 'Array', 'Object', 'String', 'Number',
+    'Boolean', 'Date', 'Promise', 'Map', 'Set',
+  ]);
+  const literals = new Set(['true', 'false', 'null', 'undefined']);
 
-  let result = escapeHtml(code);
+  // Single-pass tokenizer: tokenize raw code, build result with escaped segments
+  const rawTokenRegex = /\/\/[^\n]*|\/\*[\s\S]*?\*\/|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|=>|\b\d+\.?\d*(?:[eE][+-]?\d+)?\b|\b[a-zA-Z_$][a-zA-Z0-9_$]*\b/g;
 
-  // Comments (single line)
-  result = result.replace(/(\/\/[^\n]*)/g, '<span class="text-gray-500 dark:text-gray-500">$1</span>');
+  let result = '';
+  let lastIndex = 0;
 
-  // Strings (double and single quotes, template literals)
-  result = result.replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/g, '<span class="text-green-600 dark:text-green-400">$1</span>');
+  let match: RegExpExecArray | null;
+  while ((match = rawTokenRegex.exec(code)) !== null) {
+    // Append escaped text between tokens
+    if (match.index > lastIndex) {
+      result += escapeHtml(code.slice(lastIndex, match.index));
+    }
 
-  // Numbers
-  result = result.replace(/\b(\d+\.?\d*)\b/g, '<span class="text-orange-600 dark:text-orange-400">$1</span>');
+    const token = match[0];
+    const escapedToken = escapeHtml(token);
 
-  // Keywords
-  const keywordPattern = new RegExp(`\\b(${keywords.join('|')})\\b`, 'g');
-  result = result.replace(keywordPattern, '<span class="text-purple-600 dark:text-purple-400">$1</span>');
+    if (token.startsWith('//') || token.startsWith('/*')) {
+      // Comment
+      result += `<span class="text-gray-500 dark:text-gray-500">${escapedToken}</span>`;
+    } else if (token.startsWith('"') || token.startsWith("'") || token.startsWith('`')) {
+      // String
+      result += `<span class="text-green-600 dark:text-green-400">${escapedToken}</span>`;
+    } else if (token === '=>') {
+      // Arrow
+      result += `<span class="text-purple-600 dark:text-purple-400">${escapedToken}</span>`;
+    } else if (/^\d/.test(token)) {
+      // Number
+      result += `<span class="text-orange-600 dark:text-orange-400">${escapedToken}</span>`;
+    } else if (keywords.has(token)) {
+      // Keyword
+      result += `<span class="text-purple-600 dark:text-purple-400">${escapedToken}</span>`;
+    } else if (literals.has(token)) {
+      // Literal (true, false, null, undefined)
+      result += `<span class="text-purple-600 dark:text-purple-400">${escapedToken}</span>`;
+    } else if (builtins.has(token)) {
+      // Built-in object
+      result += `<span class="text-cyan-600 dark:text-cyan-400">${escapedToken}</span>`;
+    } else {
+      // Check if this is a function call (followed by '(')
+      const afterToken = code.slice(match.index + token.length);
+      if (/^\s*\(/.test(afterToken)) {
+        result += `<span class="text-blue-600 dark:text-blue-400">${escapedToken}</span>`;
+      } else {
+        // Check if preceded by a dot (property access)
+        const beforeToken = code.slice(Math.max(0, match.index - 1), match.index);
+        if (beforeToken === '.') {
+          result += `<span class="text-blue-500 dark:text-blue-300">${escapedToken}</span>`;
+        } else {
+          result += escapedToken;
+        }
+      }
+    }
 
-  // Booleans and null/undefined
-  result = result.replace(/\b(true|false|null|undefined)\b/g, '<span class="text-purple-600 dark:text-purple-400">$1</span>');
+    lastIndex = match.index + token.length;
+  }
 
-  // Built-in objects
-  const builtinPattern = new RegExp(`\\b(${builtins.join('|')})\\b`, 'g');
-  result = result.replace(builtinPattern, '<span class="text-cyan-600 dark:text-cyan-400">$1</span>');
-
-  // Function calls and method calls
-  result = result.replace(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/g, '<span class="text-blue-600 dark:text-blue-400">$1</span>(');
-
-  // Arrow functions
-  result = result.replace(/=&gt;/g, '<span class="text-purple-600 dark:text-purple-400">=&gt;</span>');
-
-  // Property access (dot notation)
-  result = result.replace(/\.([a-zA-Z_$][a-zA-Z0-9_$]*)/g, '.<span class="text-blue-500 dark:text-blue-300">$1</span>');
+  // Append remaining text
+  if (lastIndex < code.length) {
+    result += escapeHtml(code.slice(lastIndex));
+  }
 
   return result;
 }

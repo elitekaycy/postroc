@@ -61,12 +61,8 @@ export function generateFieldValue(field: Field): unknown {
     return items;
   }
 
-  // For non-array types, use value if provided
-  if (field.value !== undefined && field.value !== null && field.value !== '') {
-    return field.value;
-  }
-
-  // Handle object type with children
+  // Handle object type with children - prioritize children over raw value
+  // so that edits to nested fields are reflected in generated output
   if (field.type === 'object' && field.children && field.children.length > 0) {
     const obj: Record<string, unknown> = {};
     for (const child of field.children) {
@@ -75,6 +71,19 @@ export function generateFieldValue(field: Field): unknown {
       }
     }
     return obj;
+  }
+
+  // For non-array types, use value if provided (with type coercion)
+  if (field.value !== undefined && field.value !== null && field.value !== '') {
+    switch (field.type) {
+      case 'number':
+        return Number(field.value);
+      case 'boolean':
+        if (typeof field.value === 'boolean') return field.value;
+        return String(field.value).toLowerCase() === 'true' || field.value === 1;
+      default:
+        return field.value;
+    }
   }
 
   return generateValueForType(field.type, field.key);
