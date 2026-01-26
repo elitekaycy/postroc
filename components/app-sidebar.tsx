@@ -46,21 +46,18 @@ import {
   ChevronsUpDown,
   Pencil,
   GripVertical,
-  RefreshCw,
-  FolderSync,
-  Check,
-  AlertCircle,
 } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { ExportDialog } from '@/components/dialogs/export-dialog';
 import { ImportDialog } from '@/components/dialogs/import-dialog';
-import {
-  isFileSystemAccessSupported,
-  syncAllWorkspacesToCLI,
-  hasCLISyncConfigured,
-  getSyncDirectoryName,
-  clearDirectoryHandle,
-} from '@/lib/cli-sync';
+// CLI sync hidden for now
+// import {
+//   isFileSystemAccessSupported,
+//   syncAllWorkspacesToCLI,
+//   hasCLISyncConfigured,
+//   getSyncDirectoryName,
+//   clearDirectoryHandle,
+// } from '@/lib/cli-sync';
 import {
   DndContext,
   DragOverlay,
@@ -472,12 +469,12 @@ function SortableCategoryItem({
           </div>
         ) : (
           <>
-            <div className="flex items-center pr-6">
+            <div className="flex items-center pr-4">
               <DragHandle listeners={listeners} attributes={attributes} />
               <CollapsibleTrigger asChild>
                 <SidebarMenuSubButton isActive={isActive} onClick={onNavigate} className="flex-1">
                   <Box className="h-4 w-4" />
-                  <span className="truncate">{category.name}</span>
+                  <span className="truncate flex-1">{category.name}</span>
                   <ChevronRight className="ml-auto h-3 w-3 shrink-0 transition-transform group-data-[state=open]/category:rotate-90" />
                 </SidebarMenuSubButton>
               </CollapsibleTrigger>
@@ -612,7 +609,7 @@ function SortableCustomItem({
         </div>
       ) : (
         <>
-          <div className="flex items-center pr-6">
+          <div className="flex items-center pr-4">
             <DragHandle listeners={listeners} attributes={attributes} />
             <SidebarMenuSubButton
               isActive={isActive}
@@ -713,74 +710,15 @@ export function AppSidebar() {
     });
   }, []);
 
-  // CLI Sync state
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
-  const [syncDirName, setSyncDirName] = useState<string | null>(null);
-  const [fsApiSupported, setFsApiSupported] = useState(true);
+  // CLI Sync state (hidden for now)
+  // const [isSyncing, setIsSyncing] = useState(false);
+  // const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  // const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  // const [syncDirName, setSyncDirName] = useState<string | null>(null);
+  // const [fsApiSupported, setFsApiSupported] = useState(true);
 
-  // Check CLI sync configuration on mount
-  useEffect(() => {
-    setFsApiSupported(isFileSystemAccessSupported());
-
-    const checkSyncConfig = async () => {
-      const dirName = await getSyncDirectoryName();
-      setSyncDirName(dirName);
-    };
-    checkSyncConfig();
-  }, []);
-
-  const { exportWorkspaceToJSON } = useWorkspaceStore();
-
-  const handleSyncToCLI = async () => {
-    if (!fsApiSupported) {
-      setSyncStatus('error');
-      setSyncMessage('Browser does not support filesystem access');
-      return;
-    }
-
-    setIsSyncing(true);
-    setSyncStatus('idle');
-    setSyncMessage(null);
-
-    try {
-      // Prepare all workspaces for sync
-      const workspacesData = workspaces.map((ws) => ({
-        id: ws.id,
-        name: ws.name,
-        json: exportWorkspaceToJSON(ws.id, false) || '',
-      })).filter((ws) => ws.json);
-
-      const result = await syncAllWorkspacesToCLI(workspacesData);
-
-      if (result.success) {
-        setSyncStatus('success');
-        setSyncMessage(`Synced ${result.synced} workspace(s)`);
-        // Refresh directory name
-        const dirName = await getSyncDirectoryName();
-        setSyncDirName(dirName);
-      } else {
-        setSyncStatus('error');
-        setSyncMessage(result.error || 'Sync failed');
-      }
-    } catch (err) {
-      setSyncStatus('error');
-      setSyncMessage((err as Error).message);
-    } finally {
-      setIsSyncing(false);
-      // Clear status after 3 seconds
-      setTimeout(() => {
-        setSyncStatus('idle');
-        setSyncMessage(null);
-      }, 3000);
-    }
-  };
-
-  const handleClearSyncDir = async () => {
-    await clearDirectoryHandle();
-    setSyncDirName(null);
-  };
+  // CLI sync handlers hidden for now
+  // const { exportWorkspaceToJSON } = useWorkspaceStore();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -1125,44 +1063,7 @@ export function AppSidebar() {
 
         <SidebarFooter className="border-t border-sidebar-border">
           <SidebarMenu>
-            {/* CLI Sync Button */}
-            {fsApiSupported && (
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={handleSyncToCLI}
-                  disabled={isSyncing}
-                  className={syncStatus === 'success' ? 'text-green-500' : syncStatus === 'error' ? 'text-red-500' : ''}
-                >
-                  {isSyncing ? (
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                  ) : syncStatus === 'success' ? (
-                    <Check className="h-4 w-4" />
-                  ) : syncStatus === 'error' ? (
-                    <AlertCircle className="h-4 w-4" />
-                  ) : (
-                    <FolderSync className="h-4 w-4" />
-                  )}
-                  <span className="truncate">
-                    {isSyncing
-                      ? 'Syncing...'
-                      : syncMessage
-                      ? syncMessage
-                      : syncDirName
-                      ? `Sync to ${syncDirName}`
-                      : 'Sync to CLI'}
-                  </span>
-                </SidebarMenuButton>
-                {syncDirName && (
-                  <SidebarMenuAction
-                    onClick={handleClearSyncDir}
-                    title="Change sync folder"
-                    showOnHover
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </SidebarMenuAction>
-                )}
-              </SidebarMenuItem>
-            )}
+            {/* CLI Sync Button - hidden for now */}
             <SidebarMenuItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
