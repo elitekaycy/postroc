@@ -36,7 +36,7 @@ import {
   ChevronRight,
   Folder,
   Box,
-  FileCode,
+  Code2,
   Plus,
   Trash2,
   MoreHorizontal,
@@ -45,7 +45,6 @@ import {
   Trash,
   ChevronsUpDown,
   Pencil,
-  GripVertical,
 } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { ExportDialog } from '@/components/dialogs/export-dialog';
@@ -149,18 +148,6 @@ function EditableText({
   return <span className={`truncate ${className}`}>{value}</span>;
 }
 
-// Drag handle component
-function DragHandle({ listeners, attributes }: { listeners?: ReturnType<typeof useSortable>['listeners']; attributes?: ReturnType<typeof useSortable>['attributes'] }) {
-  return (
-    <button
-      className="cursor-grab active:cursor-grabbing p-0.5 -ml-1 opacity-0 group-hover/item:opacity-50 hover:!opacity-100 transition-opacity"
-      {...listeners}
-      {...attributes}
-    >
-      <GripVertical className="h-3 w-3" />
-    </button>
-  );
-}
 
 // Type for drag data
 type DragItem = {
@@ -265,7 +252,7 @@ function SortableProjectItem({
       <SidebarMenuItem ref={setNodeRef} style={style} className="group/item">
         {isEditing ? (
           <div className="flex items-center gap-2 px-2 py-1.5">
-            <Folder className="h-4 w-4 shrink-0" />
+            <Folder className="h-3 w-3 shrink-0" />
             <EditableText
               value={project.name}
               isEditing={true}
@@ -275,39 +262,40 @@ function SortableProjectItem({
           </div>
         ) : (
           <>
-            <div className="flex items-center">
-              <DragHandle listeners={listeners} attributes={attributes} />
+            <div className="flex items-center cursor-grab active:cursor-grabbing" {...listeners} {...attributes}>
               <CollapsibleTrigger asChild>
-                <SidebarMenuButton isActive={isActive} onClick={onNavigate} className="flex-1">
-                  <Folder className="h-4 w-4" />
-                  <span className="truncate">{project.name}</span>
-                  <ChevronRight className="ml-auto h-4 w-4 shrink-0 transition-transform group-data-[state=open]/collapsible:rotate-90" />
-                </SidebarMenuButton>
+                <button className="p-0.5 hover:bg-sidebar-accent/50 rounded transition-colors cursor-pointer">
+                  <ChevronRight className="h-3 w-3 shrink-0 transition-transform group-data-[state=open]/collapsible:rotate-90" />
+                </button>
               </CollapsibleTrigger>
+              <SidebarMenuButton isActive={isActive} onClick={onNavigate} className="flex-1">
+                <Folder className="h-3 w-3" />
+                <span className="truncate">{project.name}</span>
+              </SidebarMenuButton>
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuAction showOnHover>
-                  <MoreHorizontal className="h-4 w-4" />
+                  <MoreHorizontal className="h-3 w-3" />
                 </SidebarMenuAction>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="right" align="start">
                 <DropdownMenuItem onClick={onEdit}>
-                  <Pencil className="mr-2 h-4 w-4" />
+                  <Pencil className="mr-2 h-3 w-3" />
                   Rename
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => onCreateCustom()}>
-                  <Plus className="mr-2 h-4 w-4" />
+                  <Plus className="mr-2 h-3 w-3" />
                   Add Custom
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onCreateCategory}>
-                  <Box className="mr-2 h-4 w-4" />
+                  <Box className="mr-2 h-3 w-3" />
                   Add Category
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onDeleteProject} className="text-destructive">
-                  <Trash2 className="mr-2 h-4 w-4" />
+                  <Trash2 className="mr-2 h-3 w-3" />
                   Delete
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -459,7 +447,7 @@ function SortableCategoryItem({
       >
         {isEditing ? (
           <div className="flex items-center gap-2 px-2 py-1">
-            <Box className="h-4 w-4 shrink-0" />
+            <Box className="h-3 w-3 shrink-0" />
             <EditableText
               value={category.name}
               isEditing={true}
@@ -469,15 +457,16 @@ function SortableCategoryItem({
           </div>
         ) : (
           <>
-            <div className="flex items-center pr-4">
-              <DragHandle listeners={listeners} attributes={attributes} />
+            <div className="flex items-center pr-2 cursor-grab active:cursor-grabbing" {...listeners} {...attributes}>
               <CollapsibleTrigger asChild>
-                <SidebarMenuSubButton isActive={isActive} onClick={onNavigate} className="flex-1">
-                  <Box className="h-4 w-4" />
-                  <span className="truncate flex-1">{category.name}</span>
-                  <ChevronRight className="ml-auto h-3 w-3 shrink-0 transition-transform group-data-[state=open]/category:rotate-90" />
-                </SidebarMenuSubButton>
+                <button className="p-0.5 hover:bg-sidebar-accent/50 rounded transition-colors cursor-pointer">
+                  <ChevronRight className="h-3 w-3 shrink-0 transition-transform group-data-[state=open]/category:rotate-90" />
+                </button>
               </CollapsibleTrigger>
+              <SidebarMenuSubButton isActive={isActive} onClick={onNavigate} className="flex-1">
+                <Box className="h-3 w-3" />
+                <span className="truncate flex-1">{category.name}</span>
+              </SidebarMenuSubButton>
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -487,16 +476,16 @@ function SortableCategoryItem({
               </DropdownMenuTrigger>
               <DropdownMenuContent side="right" align="start">
                 <DropdownMenuItem onClick={onEdit}>
-                  <Pencil className="mr-2 h-4 w-4" />
+                  <Pencil className="mr-2 h-3 w-3" />
                   Rename
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onCreateCustom}>
-                  <Plus className="mr-2 h-4 w-4" />
+                  <Plus className="mr-2 h-3 w-3" />
                   Add Custom
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onDelete} className="text-destructive">
-                  <Trash2 className="mr-2 h-4 w-4" />
+                  <Trash2 className="mr-2 h-3 w-3" />
                   Delete
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -504,7 +493,7 @@ function SortableCategoryItem({
           </>
         )}
         <CollapsibleContent>
-          <SidebarMenuSub className="ml-4 border-l-0">
+          <SidebarMenuSub className="ml-2 border-l-0">
             <SortableContext
               items={category.customs.map((c) => c.id)}
               strategy={verticalListSortingStrategy}
@@ -599,7 +588,7 @@ function SortableCustomItem({
     <SidebarMenuSubItem ref={setNodeRef} style={style} className="group/item">
       {isEditing ? (
         <div className="flex items-center gap-2 px-2 py-1">
-          <FileCode className={isInCategory ? 'h-3 w-3 shrink-0' : 'h-4 w-4 shrink-0'} />
+          <Code2 className={isInCategory ? 'h-3 w-3 shrink-0' : 'h-3 w-3 shrink-0'} />
           <EditableText
             value={custom.name}
             isEditing={true}
@@ -609,15 +598,15 @@ function SortableCustomItem({
         </div>
       ) : (
         <>
-          <div className="flex items-center pr-4">
-            <DragHandle listeners={listeners} attributes={attributes} />
+          <div className="flex items-center pr-2 cursor-grab active:cursor-grabbing" {...listeners} {...attributes}>
+            <span className="w-4" /> {/* Spacer to align with chevrons */}
             <SidebarMenuSubButton
               isActive={isActive}
               onClick={onNavigate}
               size={isInCategory ? 'sm' : undefined}
               className="flex-1"
             >
-              <FileCode className={isInCategory ? 'h-3 w-3' : 'h-4 w-4'} />
+              <Code2 className="h-3 w-3" />
               <span className="truncate">{custom.name}</span>
             </SidebarMenuSubButton>
           </div>
@@ -629,12 +618,12 @@ function SortableCustomItem({
             </DropdownMenuTrigger>
             <DropdownMenuContent side="right" align="start">
               <DropdownMenuItem onClick={onEdit}>
-                <Pencil className="mr-2 h-4 w-4" />
+                <Pencil className="mr-2 h-3 w-3" />
                 Rename
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={onDelete} className="text-destructive">
-                <Trash2 className="mr-2 h-4 w-4" />
+                <Trash2 className="mr-2 h-3 w-3" />
                 Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -941,7 +930,7 @@ export function AppSidebar() {
                   <DropdownMenuTrigger asChild>
                     <SidebarMenuButton size="lg" className="w-full justify-between">
                       <span className="font-semibold truncate">{activeWorkspace?.name || 'Workspace'}</span>
-                      <ChevronsUpDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
+                      <ChevronsUpDown className="ml-auto h-3 w-3 shrink-0 opacity-50" />
                     </SidebarMenuButton>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent className="w-56" align="start">
@@ -956,11 +945,11 @@ export function AppSidebar() {
                     ))}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => activeWorkspaceId && setEditingId(activeWorkspaceId)}>
-                      <Pencil className="mr-2 h-4 w-4" />
+                      <Pencil className="mr-2 h-3 w-3" />
                       Rename Workspace
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => createWorkspace()}>
-                      <Plus className="mr-2 h-4 w-4" />
+                      <Plus className="mr-2 h-3 w-3" />
                       New Workspace
                     </DropdownMenuItem>
                     {workspaces.length > 1 && (
@@ -974,7 +963,7 @@ export function AppSidebar() {
                           }}
                           className="text-destructive"
                         >
-                          <Trash2 className="mr-2 h-4 w-4" />
+                          <Trash2 className="mr-2 h-3 w-3" />
                           Delete Workspace
                         </DropdownMenuItem>
                       </>
@@ -993,7 +982,7 @@ export function AppSidebar() {
               title="Add Project"
               onClick={() => activeWorkspaceId && createProject(activeWorkspaceId)}
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-3 w-3" />
             </SidebarGroupAction>
             <SidebarGroupContent>
               <SortableContext
@@ -1068,17 +1057,17 @@ export function AppSidebar() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton>
-                    <MoreHorizontal className="h-4 w-4" />
+                    <MoreHorizontal className="h-3 w-3" />
                     <span>More</span>
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="top" align="start" className="w-48">
                   <DropdownMenuItem onClick={() => setShowExportDialog(true)}>
-                    <Download className="mr-2 h-4 w-4" />
+                    <Download className="mr-2 h-3 w-3" />
                     Export...
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setShowImportDialog(true)}>
-                    <Upload className="mr-2 h-4 w-4" />
+                    <Upload className="mr-2 h-3 w-3" />
                     Import...
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -1090,7 +1079,7 @@ export function AppSidebar() {
                     }}
                     className="text-destructive"
                   >
-                    <Trash className="mr-2 h-4 w-4" />
+                    <Trash className="mr-2 h-3 w-3" />
                     Clear All Data
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -1108,9 +1097,9 @@ export function AppSidebar() {
       <DragOverlay>
         {activeItem ? (
           <div className="bg-sidebar border border-sidebar-border rounded-md px-3 py-2 shadow-lg text-sm">
-            {activeItem.type === 'project' && <Folder className="h-4 w-4 inline mr-2" />}
-            {activeItem.type === 'category' && <Box className="h-4 w-4 inline mr-2" />}
-            {activeItem.type === 'custom' && <FileCode className="h-4 w-4 inline mr-2" />}
+            {activeItem.type === 'project' && <Folder className="h-3 w-3 inline mr-2" />}
+            {activeItem.type === 'category' && <Box className="h-3 w-3 inline mr-2" />}
+            {activeItem.type === 'custom' && <Code2 className="h-3 w-3 inline mr-2" />}
             <span>Dragging...</span>
           </div>
         ) : null}
